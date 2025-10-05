@@ -2,7 +2,7 @@ package com.cburch.logisim.verilog.file.jsonhdlr;
 
 import com.cburch.logisim.verilog.comp.impl.VerilogModuleImpl;
 import com.cburch.logisim.verilog.comp.auxiliary.ModulePort;
-import com.cburch.logisim.verilog.comp.auxiliary.netconn.Direction;
+import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.*;
@@ -137,7 +137,7 @@ public record YosysModuleDTO(String name, JsonNode moduleNode) {
             String portName = e.getKey();
             JsonNode p = e.getValue();
 
-            Direction dir = Direction.fromJson(p.path("direction").asText("unknown"));
+            PortDirection dir = PortDirection.fromJson(p.path("direction").asText("unknown"));
             JsonNode bits = p.path("bits");
             int[] netIds = new int[bits.size()];
 

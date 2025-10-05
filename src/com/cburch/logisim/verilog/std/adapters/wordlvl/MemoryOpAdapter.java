@@ -5,8 +5,10 @@ import com.cburch.logisim.circuit.CircuitException;
 import com.cburch.logisim.comp.Component;
 import com.cburch.logisim.comp.ComponentFactory;
 import com.cburch.logisim.data.AttributeSet;
+import com.cburch.logisim.data.BitWidth;
 import com.cburch.logisim.data.Location;
 import com.cburch.logisim.gui.main.Canvas;
+import com.cburch.logisim.instance.*;
 import com.cburch.logisim.proj.Project;
 import com.cburch.logisim.tools.Library;
 import com.cburch.logisim.verilog.comp.auxiliary.CellType;
@@ -20,8 +22,8 @@ import com.cburch.logisim.verilog.comp.specs.GenericCellParams;
 import com.cburch.logisim.verilog.comp.specs.wordlvl.MemoryOp;
 import com.cburch.logisim.verilog.layout.MemoryIndex;
 import com.cburch.logisim.verilog.std.AbstractComponentAdapter;
+import com.cburch.logisim.verilog.std.BuiltinPortMaps;
 import com.cburch.logisim.verilog.std.InstanceHandle;
-import com.cburch.logisim.verilog.std.PinLocator;
 import com.cburch.logisim.verilog.std.adapters.ModuleBlackBoxAdapter;
 
 import java.awt.*;
@@ -35,10 +37,16 @@ public final class MemoryOpAdapter extends AbstractComponentAdapter
     private MemoryIndex currentMemIndex;
     private VerilogModuleImpl currentModule;
 
-    /** Llamar desde el importador justo después de construir el MemoryIndex del módulo. */
+    // Evita crear múltiples instancias físicas por el mismo MEMID
+    private final java.util.Set<String> createdMemIds = new java.util.HashSet<>();
+
+    /**
+     * Llamar desde el importador justo después de construir el MemoryIndex del módulo.
+     */
     public void beginModule(MemoryIndex idx, VerilogModuleImpl mod) {
         this.currentMemIndex = idx;
-        this.currentModule   = mod;
+        this.currentModule = mod;
+        this.createdMemIds.clear();
     }
 
     @Override
@@ -53,7 +61,7 @@ public final class MemoryOpAdapter extends AbstractComponentAdapter
     @Override
     public InstanceHandle create(Canvas canvas, Graphics g, VerilogCell cell, Location where) {
         try {
-            // Si no tenemos índice del módulo, no podemos unificar → fallback
+            // Sin índice → no podemos unificar → fallback
             if (currentMemIndex == null) {
                 return fallback.create(canvas, g, cell, where);
             }
@@ -69,13 +77,15 @@ public final class MemoryOpAdapter extends AbstractComponentAdapter
                 return fallback.create(canvas, g, cell, where);
             }
 
-            // Unificación: tanto $mem/$mem_v2 como $memrd/$memwr/$meminit
-            // se convierten en **una** RAM/ROM. (Si ya la colocaste, puedes
-            // elegir ignorar siguientes celdas del mismo MEMID; aquí lo simple:
-            // crear siempre una instancia —si tu importador llama create una vez
-            // por celda, verás varias RAM/ROM iguales; si quieres evitarlo,
-            // habilita una marca en lm/meta o en el circuito).
-            return createUnifiedRamOrRom(canvas, g, cell, where, lm);
+            // Si ya instanciamos la memoria lógica (por MEMID), no dupliques.
+            if (createdMemIds.contains(lm.memId())) {
+                // Devuelve un “handle vacío” de cortesía (no se usará para wiring)
+                return new InstanceHandle(null, null);
+            }
+
+            InstanceHandle ih = createUnifiedRamOrRom(canvas, g, cell, where, lm);
+            createdMemIds.add(lm.memId());
+            return ih;
 
         } catch (CircuitException e) {
             throw new IllegalStateException("MemoryOpAdapter: " + e.getMessage(), e);
@@ -92,16 +102,24 @@ public final class MemoryOpAdapter extends AbstractComponentAdapter
         if (lm == null) return null;
 
         boolean hasWrite = !lm.writePortIdxs().isEmpty();
-        Library lib = pickMemoryLibrary(proj);
-        if (lib == null) return null;
-
-        String compName = hasWrite ? "RAM" : "ROM";
-        return FactoryLookup.findFactory(lib, compName);
+        LibFactory lf = pickMemoryFactory(proj, hasWrite);
+        return lf == null ? null : lf.factory;
     }
 
     /* =======================================================================
        Implementación
        ======================================================================= */
+
+    // Paquete (Library, Factory) para usar BuiltinPortMaps.forFactory(...)
+    private static final class LibFactory {
+        final Library lib;
+        final ComponentFactory factory;
+
+        LibFactory(Library lib, ComponentFactory factory) {
+            this.lib = lib;
+            this.factory = factory;
+        }
+    }
 
     private InstanceHandle createUnifiedRamOrRom(Canvas canvas, Graphics g,
                                                  VerilogCell anyCellOfThisMem,
@@ -112,14 +130,14 @@ public final class MemoryOpAdapter extends AbstractComponentAdapter
         Circuit circ = canvas.getCircuit();
 
         // 1) Deducir parámetros (width / depth / abits)
-        int width  = 8;
-        int depth  = 256;
-        int abits  = 8;
+        int width = 8;
+        int depth = 256;
+        int abits = 8;
 
         // Prioriza meta (si vino del JSON/YosysMemoryDTO)
         if (lm.meta() != null) {
             if (lm.meta().width() > 0) width = lm.meta().width();
-            if (lm.meta().size()  > 0) depth = lm.meta().size();
+            if (lm.meta().size() > 0) depth = lm.meta().size();
         }
 
         // Si la celda tiene ABITS/WIDTH definidos, (re)ajusta
@@ -129,55 +147,75 @@ public final class MemoryOpAdapter extends AbstractComponentAdapter
             if (w > 0) width = w;
             if (a > 0) abits = a;
         }
+        if (abits <= 0 && depth > 0) abits = Math.max(1, ceilLog2(depth));
+        if (depth <= 0 && abits > 0) depth = 1 << abits;
 
-        // Si de meta vino sólo width/size, calcula abits desde depth (o viceversa)
-        if (abits <= 0 && depth > 0) {
-            abits = Math.max(1, ceilLog2(depth));
-        }
-        if (depth <= 0 && abits > 0) {
-            depth = 1 << abits;
-        }
-
-        // 2) Elegir RAM vs ROM (si hay writePorts → RAM, si no → ROM)
         boolean hasWrite = !lm.writePortIdxs().isEmpty();
 
-        // 3) Elegir librería/Factory
-        Library memLib = pickMemoryLibrary(proj);
-        if (memLib == null) {
+        // 2) Elegir librería/Factory
+        LibFactory lf = pickMemoryFactory(proj, hasWrite);
+        if (lf == null) {
             return fallback.create(canvas, g, anyCellOfThisMem, where);
         }
 
-        String compName = hasWrite ? "RAM" : "ROM";
-        ComponentFactory f = FactoryLookup.findFactory(memLib, compName);
-        if (f == null) {
-            return fallback.create(canvas, g, anyCellOfThisMem, where);
+        // 3) Atributos para tu RAM/ROM
+        AttributeSet attrs = lf.factory.createAttributeSet();
+
+        // Si tu RAM/ROM soporta StdAttr.WIDTH como “ancho de datos”, setéalo también
+        try {
+            attrs.setValue(StdAttr.WIDTH, BitWidth.create(Math.max(1, width)));
+        } catch (Exception ignore) {
         }
 
-        // 4) Atributos para tu RAM/ROM
-        AttributeSet attrs = f.createAttributeSet();
+        // Y nombres “tolerantes” por token (ajusta a los que use tu implementación real)
+        setParsedIfPresent(attrs, "label", cleanCellName(lm.memId()));
+        setParsedByName(attrs, "dataWidth", Integer.toString(width));  // si tu comp lo reconoce
+        setParsedByName(attrs, "addrWidth", Integer.toString(abits));  // idem
+        setParsedByName(attrs, "depth", Integer.toString(depth));   // idem
 
-        // OJO: estos nombres dependen de tus componentes RAM/ROM reales
-        // Ajusta si tus atributos tienen otros "name tokens":
-        //   - Ejemplos comunes: "width", "addrBits", "depth" o "dataWidth" / "addressBits"
-        setParsedByName(attrs, "dataWidth", Integer.toString(width));   // TODO: ajusta nombre si difiere
-        setParsedByName(attrs, "addrWidth", Integer.toString(abits));   // TODO: ajusta nombre si difiere
-        setParsedByName(attrs, "depth",    Integer.toString(depth));   // TODO: si tu RAM lo expone
-        setParsedIfPresent(attrs, "label", cleanCellName(lm.memId())); // etiqueta amistosa
+        Component comp = addComponent(proj, circ, g, lf.factory, where, attrs);
 
-        Component comp = addComponent(proj, circ, g, f, where, attrs);
+        // 4) Mapear puertos con BuiltinPortMaps (si registraste RAM/ROM allí)
+        java.util.Map<String, Integer> nameToIdx =
+                BuiltinPortMaps.forFactory(lf.lib, lf.factory, comp);
 
-        // PinLocator trivial (si luego quieres mapear puertos a pins físicos)
-        PinLocator pins = (port, bit) -> comp.getLocation();
-        return new InstanceHandle(comp, pins);
+        // Fallback si aún no registraste el port-map:
+        if (nameToIdx == null || nameToIdx.isEmpty()) {
+            // Suponemos nombres más típicos (ajusta a tu RAM/ROM real):
+            // Ej.: RAM: A(addr), D(data in), WE, EN, CLK, Q(data out)
+            //      ROM: A(addr), Q(data out)
+            java.util.LinkedHashMap<String, Integer> fallbackMap = new java.util.LinkedHashMap<>();
+            // En muchas RAM/ROM de Logisim: Q suele ser 0, D 1, A 2, etc. (ajústalo)
+            // Para no inventar: deja un mínimo Y/A, como ya tenías:
+            fallbackMap.put("A", 0); // addr
+            fallbackMap.put("Y", 1); // data out
+            nameToIdx = fallbackMap;
+        }
+
+        PortGeom pg = PortGeom.of(comp, nameToIdx);
+        return new InstanceHandle(comp, pg);
     }
 
-    private static Library pickMemoryLibrary(Project proj) {
+    /**
+     * Devuelve (Library, Factory) para RAM o ROM según haya puertos de escritura.
+     */
+    private static LibFactory pickMemoryFactory(Project proj, boolean hasWrite) {
         if (proj == null || proj.getLogisimFile() == null) return null;
-        // 1º intenta la librería nativa de Logisim
+
+        String compName = hasWrite ? "RAM" : "ROM";
+
         Library mem = proj.getLogisimFile().getLibrary("Memory");
-        if (mem != null) return mem;
-        // 2º intenta tu librería custom, si es donde viven RAM/ROM
-        return proj.getLogisimFile().getLibrary("Yosys Components");
+        if (mem != null) {
+            ComponentFactory f = FactoryLookup.findFactory(mem, compName);
+            if (f != null) return new LibFactory(mem, f);
+        }
+        // Segundo intento: tu librería custom (si ahí viven RAM/ROM)
+        Library yosys = proj.getLogisimFile().getLibrary("Yosys Components");
+        if (yosys != null) {
+            ComponentFactory f = FactoryLookup.findFactory(yosys, compName);
+            if (f != null) return new LibFactory(yosys, f);
+        }
+        return null;
     }
 
     private static String readMemId(CellParams p) {

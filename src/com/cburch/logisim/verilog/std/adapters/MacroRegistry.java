@@ -60,19 +60,23 @@ public final class MacroRegistry {
         MacroRegistry reg = new MacroRegistry();
         BinaryOpComposer b = new BinaryOpComposer();
 
-        /*
-        reg.register("$logic_and", (ctx, cell, where) -> {
+        reg.register("$ne", (ctx, cell, where) -> {
             int aw = guessWidth(cell.params(), "A_WIDTH", 1);
             int bw = guessWidth(cell.params(), "B_WIDTH", 1);
-            return b.buildLogicAndAsSubckt(ctx, cell, where, aw, bw);
+            return b.buildNeAsSubckt(ctx, cell, where, aw, bw);
         });
 
-        reg.register("$logic_or", (ctx, cell, where) -> {
+        reg.register("$le", (ctx, cell, where) -> {
             int aw = guessWidth(cell.params(), "A_WIDTH", 1);
             int bw = guessWidth(cell.params(), "B_WIDTH", 1);
-            return b.buildLogicOrAsSubckt(ctx, cell, where, aw, bw);
+            return b.buildLeAsSubckt(ctx, cell, where, aw, bw);
         });
-        */
+
+        reg.register("$ge", (ctx, cell, where) -> {
+            int aw = guessWidth(cell.params(), "A_WIDTH", 1);
+            int bw = guessWidth(cell.params(), "B_WIDTH", 1);
+            return b.buildGeAsSubckt(ctx, cell, where, aw, bw);
+        });
 
         return reg;
     }
@@ -85,4 +89,3 @@ public final class MacroRegistry {
         return dflt;
     }
 }
-

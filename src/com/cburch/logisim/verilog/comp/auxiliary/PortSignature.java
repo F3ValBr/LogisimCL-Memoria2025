@@ -1,30 +1,30 @@
 package com.cburch.logisim.verilog.comp.auxiliary;
 
+import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
 import com.cburch.logisim.verilog.comp.impl.VerilogCell;
-import com.cburch.logisim.verilog.comp.auxiliary.netconn.Direction;
 
 import java.util.Objects;
 
 /**
  * Represents the signature of a port in a Verilog cell, including the cell it belongs to,
- * the port name, and its direction (INPUT, OUTPUT, INOUT).
+ * the port name, and its portDirection (INPUT, OUTPUT, INOUT).
  */
 public final class PortSignature {
     private final VerilogCell cell;     // Celda a la que pertenece el puerto
     private final String portName;      // Nombre del puerto en la celda
-    private final Direction direction;  // INPUT, OUTPUT, INOUT
+    private final PortDirection portDirection;  // INPUT, OUTPUT, INOUT
 
     /**
      * Constructor for PortSignature
      *
      * @param cell      The VerilogCell to which the port belongs
      * @param portName  The name of the port within the cell
-     * @param direction The direction of the port (INPUT, OUTPUT, INOUT)
+     * @param portDirection The portDirection of the port (INPUT, OUTPUT, INOUT)
      */
-    public PortSignature(VerilogCell cell, String portName, Direction direction) {
+    public PortSignature(VerilogCell cell, String portName, PortDirection portDirection) {
         this.cell = cell;
         this.portName = portName;
-        this.direction = direction;
+        this.portDirection = portDirection;
     }
 
     public VerilogCell cell() {
@@ -33,8 +33,8 @@ public final class PortSignature {
     public String portName() {
         return portName;
     }
-    public Direction direction() {
-        return direction;
+    public PortDirection direction() {
+        return portDirection;
     }
 
     @Override
@@ -42,13 +42,13 @@ public final class PortSignature {
         if (this == o) return true;
         if (!(o instanceof PortSignature that)) return false;
 
-        return direction == that.direction
+        return portDirection == that.portDirection
                 && Objects.equals(cell, that.cell)
                 && Objects.equals(portName, that.portName);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(cell, portName, direction);
+        return Objects.hash(cell, portName, portDirection);
     }
 }

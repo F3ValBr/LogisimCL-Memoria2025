@@ -5,7 +5,7 @@ package com.cburch.logisim.verilog.comp.auxiliary.netconn;
  * Possible values are INPUT, OUTPUT, INOUT, and UNKNOWN.
  * Provides methods for JSON serialization and deserialization.
  */
-public enum Direction {
+public enum PortDirection {
     INPUT("input"),
     OUTPUT("output"),
     INOUT("inout"),
@@ -13,7 +13,7 @@ public enum Direction {
 
     private final String dirValue;
 
-    Direction(String dirValue) {
+    PortDirection(String dirValue) {
         this.dirValue = dirValue;
     }
 
@@ -21,11 +21,11 @@ public enum Direction {
         return dirValue;
     }
 
-    public static Direction fromJson(String value) {
+    public static PortDirection fromJson(String value) {
         if (value == null || value.isEmpty()) {
             return UNKNOWN;
         }
-        for (Direction dir : values()) {
+        for (PortDirection dir : values()) {
             if (dir.dirValue.equalsIgnoreCase(value)) {
                 return dir;
             }

@@ -409,28 +409,37 @@ class CircuitWires {
 		BundleMap bmap = getBundleMap();
 		boolean isValid = bmap.isValid();
 		if (hidden == null || hidden.size() == 0) {
-			for (Wire w : wires) {
-				Location s = w.e0;
-				Location t = w.e1;
-				WireBundle wb = bmap.getBundleAt(s);
-				if (!wb.isValid()) {
-					g.setColor(Value.WIDTH_ERROR_COLOR);
-				} else if (showState) {
-					if (!isValid) g.setColor(Value.NIL_COLOR);
-					else         g.setColor(state.getValue(s).getColor());
-				} else {
-					g.setColor(Color.BLACK);
-				}
-				if (highlighted.containsWire(w)) {
-					GraphicsUtil.switchToWidth(g, Wire.WIDTH + 2);
-					g.drawLine(s.getX(), s.getY(), t.getX(), t.getY());
-					GraphicsUtil.switchToWidth(g, Wire.WIDTH);
-				} else {
-					g.drawLine(s.getX(), s.getY(), t.getX(), t.getY());
-				}
-			}
+            for (Wire w : wires) {
+                Location s = w.e0;
+                Location t = w.e1;
+                WireBundle wb = bmap.getBundleAt(s);
 
-			for (Location loc : points.getSplitLocations()) {
+                if (wb == null) {
+                    System.out.println("Error");
+                    // Bundle aún no asociado: pinta razonable
+                    if (showState) {
+                        g.setColor(Value.NIL_COLOR);
+                    } else {
+                        g.setColor(Color.BLACK);
+                    }
+                } else if (!wb.isValid()) {
+                    g.setColor(Value.WIDTH_ERROR_COLOR);
+                } else if (showState) {
+                    if (!isValid) g.setColor(Value.NIL_COLOR);
+                    else          g.setColor(state.getValue(s).getColor());
+                } else {
+                    g.setColor(Color.BLACK);
+                }
+                if (highlighted.containsWire(w)) {
+                    GraphicsUtil.switchToWidth(g, Wire.WIDTH + 2);
+                    g.drawLine(s.getX(), s.getY(), t.getX(), t.getY());
+                    GraphicsUtil.switchToWidth(g, Wire.WIDTH);
+                } else {
+                    g.drawLine(s.getX(), s.getY(), t.getX(), t.getY());
+                }
+            }
+
+            for (Location loc : points.getSplitLocations()) {
 				if (points.getComponentCount(loc) > 2) {
 					WireBundle wb = bmap.getBundleAt(loc);
 					if (wb != null) {

@@ -1,8 +1,8 @@
 package com.cburch.logisim.verilog.comp.auxiliary;
 
+import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
 import com.cburch.logisim.verilog.comp.impl.VerilogCell;
 import com.cburch.logisim.verilog.comp.auxiliary.netconn.BitRef;
-import com.cburch.logisim.verilog.comp.auxiliary.netconn.Direction;
 import com.cburch.logisim.verilog.comp.auxiliary.netconn.NetBit;
 
 import java.util.Objects;
@@ -41,7 +41,7 @@ public final class PortEndpoint {
         return bitIndex;
     }
 
-    public Direction getDirection() {
+    public PortDirection getDirection() {
         return sig.direction();
     }
 

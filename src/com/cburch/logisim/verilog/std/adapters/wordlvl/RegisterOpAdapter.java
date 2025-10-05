@@ -9,7 +9,7 @@ import com.cburch.logisim.comp.ComponentFactory;
 import com.cburch.logisim.data.*;
 import com.cburch.logisim.file.LogisimFile;
 import com.cburch.logisim.gui.main.Canvas;
-import com.cburch.logisim.instance.StdAttr;
+import com.cburch.logisim.instance.*;
 import com.cburch.logisim.proj.Project;
 import com.cburch.logisim.tools.Library;
 import com.cburch.logisim.verilog.comp.auxiliary.CellType;
@@ -22,11 +22,10 @@ import com.cburch.logisim.verilog.std.*;
 import com.cburch.logisim.verilog.std.adapters.ModuleBlackBoxAdapter;
 
 import java.awt.Graphics;
-import java.util.Locale;
 import java.util.Map;
 
 public final class RegisterOpAdapter extends AbstractComponentAdapter
-                                     implements SupportsFactoryLookup {
+        implements SupportsFactoryLookup {
 
     // Names esperados en tu Register (cámbialos si usaste otros):
     private static final String A_REG_HAS_EN       = "regHasEnable";
@@ -47,6 +46,13 @@ public final class RegisterOpAdapter extends AbstractComponentAdapter
 
     private final ModuleBlackBoxAdapter fallback = new ModuleBlackBoxAdapter();
 
+    // Pareja (Library, ComponentFactory) para usar BuiltinPortMaps.forFactory(...)
+    private static final class LibFactory {
+        final Library lib;
+        final ComponentFactory factory;
+        LibFactory(Library lib, ComponentFactory factory) { this.lib = lib; this.factory = factory; }
+    }
+
     @Override
     public boolean accepts(CellType t) {
         return t != null && t.isWordLevel() && t.isRegister();
@@ -54,20 +60,19 @@ public final class RegisterOpAdapter extends AbstractComponentAdapter
 
     @Override
     public InstanceHandle create(Canvas canvas, Graphics g, VerilogCell cell, Location where) {
-        ComponentFactory factory = pickRegisterFactory(canvas.getProject());
-        if (factory == null) {
+        LibFactory lf = pickRegisterFactory(canvas.getProject());
+        if (lf == null) {
             return fallback.create(canvas, g, cell, where);
         }
 
         final CellParams params = cell.params();
-        final String typeId = cell.type().typeId().toLowerCase(Locale.ROOT);
+        final String typeId = cell.type().typeId().toLowerCase(java.util.Locale.ROOT);
 
         final int width = Math.max(1, guessWidth(params));
 
         // ¿Es latch?
         final boolean isLatch =
-                typeId.contains("dlatch") ||     // $dlatch, $adlatch, $dlatchsr, etc.
-                        typeId.startsWith("$dlatch");
+                typeId.contains("dlatch") || typeId.startsWith("$dlatch");
 
         // Enable (Yosys usa EN/EN_POLARITY en varios tipos)
         final boolean hasEnPort =
@@ -87,7 +92,7 @@ public final class RegisterOpAdapter extends AbstractComponentAdapter
         try {
             Project proj = canvas.getProject();
             Circuit circ = canvas.getCircuit();
-            AttributeSet attrs = factory.createAttributeSet();
+            AttributeSet attrs = lf.factory.createAttributeSet();
 
             // Básicos
             safeSet(attrs, StdAttr.WIDTH, BitWidth.create(width));
@@ -127,16 +132,31 @@ public final class RegisterOpAdapter extends AbstractComponentAdapter
             // Nota sobre variantes:
             // - $adlatch → normalmente caerá en ASYNC vía detectReset (ARST_*).
             // - $dlatchsr → si Yosys expone SRST/ARST lo tomará; si no, queda NO_RESET.
-            // - $sr (latch SR puro): te sugiero fallback por ahora (no tiene clock/enable estándar).
+            // - $sr (latch SR puro): por ahora fallback (no tiene clock/enable estándar).
             if (typeId.equals("$sr")) {
                 // TODO: mapear $sr a Register más adelante, cambiar esto.
                 return fallback.create(canvas, g, cell, where);
             }
 
-            Component comp = addComponent(proj, circ, g, factory, where, attrs);
-            PinLocator pins = (port, bit) -> comp.getLocation(); // placeholder
-            return new InstanceHandle(comp, pins);
+            Component comp = addComponent(proj, circ, g, lf.factory, where, attrs);
 
+            // == Port map dinámico por librería+factory+instancia ==
+            // (Requiere que BuiltinPortMaps.initOnce(...) haya corrido antes)
+            Map<String,Integer> nameToIdx =
+                    BuiltinPortMaps.forFactory(lf.lib, lf.factory, comp);
+
+            // Si no registraste aún un resolver para Register, como mínimo intenta Q/D/CLK:
+            if (nameToIdx.isEmpty()) {
+                // Orden por tu Register: OUT=0, IN=1, CK=2, (RST=?, EN=?)
+                nameToIdx = new java.util.LinkedHashMap<>();
+                nameToIdx.put("Q",   0);
+                nameToIdx.put("D",   1);
+                nameToIdx.put("CLK", 2);
+                // Deja RST/EN para cuando registres el resolver (ver helper abajo).
+            }
+
+            PortGeom pg = PortGeom.of(comp, nameToIdx);
+            return new InstanceHandle(comp, pg);
         } catch (CircuitException e) {
             throw new IllegalStateException("No se pudo añadir Register/Latch: " + e.getMessage(), e);
         }
@@ -144,18 +164,19 @@ public final class RegisterOpAdapter extends AbstractComponentAdapter
 
     @Override
     public ComponentFactory peekFactory(Project proj, VerilogCell cell) {
-        return pickRegisterFactory(proj);
+        LibFactory lf = pickRegisterFactory(proj);
+        return lf == null ? null : lf.factory;
     }
 
     /* ================= helpers ================= */
 
-    private static ComponentFactory pickRegisterFactory(Project proj) {
+    private static LibFactory pickRegisterFactory(Project proj) {
         LogisimFile lf = proj.getLogisimFile();
         if (lf == null) return null;
         Library mem = lf.getLibrary("Memory");
         if (mem == null) return null;
-
-        return FactoryLookup.findFactory(mem, "Register");
+        ComponentFactory f = FactoryLookup.findFactory(mem, "Register");
+        return (f == null) ? null : new LibFactory(mem, f);
     }
 
     private static int guessWidth(CellParams p) {
@@ -175,8 +196,8 @@ public final class RegisterOpAdapter extends AbstractComponentAdapter
 
     /** Detecta tipo/polaridad/valor de reset a partir de typeId y parámetros Yosys. */
     private static ResetInfo detectReset(VerilogCell cell) {
-        Map<String, Object> m = (cell.params() instanceof GenericCellParams g) ? g.asMap() : Map.of();
-        String t = cell.type().typeId().toLowerCase(Locale.ROOT);
+        Map<String, Object> m = (cell.params() instanceof GenericCellParams g) ? g.asMap() : java.util.Map.of();
+        String t = cell.type().typeId().toLowerCase(java.util.Locale.ROOT);
 
         // Heurística por presencia de parámetros
         boolean hasArst = m.containsKey("ARST_VALUE") || m.containsKey("ARST_POLARITY");
@@ -231,7 +252,7 @@ public final class RegisterOpAdapter extends AbstractComponentAdapter
         private ResetInfo(Kind kind, boolean activeHigh, String valueText) {
             this.kind = kind; this.activeHigh = activeHigh; this.valueText = valueText;
         }
-        static ResetInfo none()                    { return new ResetInfo(Kind.NONE,  true, "0"); }
+        static ResetInfo none()                     { return new ResetInfo(Kind.NONE,  true, "0"); }
         static ResetInfo async(boolean hi, String v){ return new ResetInfo(Kind.ASYNC, hi, v); }
         static ResetInfo sync (boolean hi, String v){ return new ResetInfo(Kind.SYNC,  hi, v); }
     }

@@ -10,8 +10,7 @@ import com.cburch.logisim.data.Location;
 import com.cburch.logisim.file.LogisimFile;
 import com.cburch.logisim.file.LogisimFileActions;
 import com.cburch.logisim.gui.main.Canvas;
-import com.cburch.logisim.instance.InstanceFactory;
-import com.cburch.logisim.instance.StdAttr;
+import com.cburch.logisim.instance.*;
 import com.cburch.logisim.proj.Dependencies;
 import com.cburch.logisim.proj.Project;
 import com.cburch.logisim.verilog.comp.auxiliary.CellType;
@@ -20,6 +19,8 @@ import com.cburch.logisim.verilog.std.*;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
 
@@ -67,8 +68,12 @@ public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
             // 4) Añadir con acción (undo/redo)
             Component comp = addComponent(proj, currentCirc, g, factory, where, attrs);
             // 6) PinLocator simple
-            PinLocator pins = (port, bit) -> comp.getLocation();
-            return new InstanceHandle(comp, pins);
+            Map<String,Integer> nameToIdx = new LinkedHashMap<>();
+            nameToIdx.put("A", 0);
+            nameToIdx.put("Y", 1);
+
+            PortGeom pg = PortGeom.of(comp, nameToIdx);
+            return new InstanceHandle(comp, pg);
         } catch (CircuitException e) {
             throw new IllegalStateException("No se pudo añadir subcircuito: " + e.getMessage(), e);
         } catch (RuntimeException e) {

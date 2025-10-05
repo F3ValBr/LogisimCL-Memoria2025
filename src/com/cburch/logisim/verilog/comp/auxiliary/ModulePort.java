@@ -1,6 +1,6 @@
 package com.cburch.logisim.verilog.comp.auxiliary;
 
-import com.cburch.logisim.verilog.comp.auxiliary.netconn.Direction;
+import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
 
 public final class ModulePort {
     public static final int CONST_0 = -1;
@@ -8,17 +8,17 @@ public final class ModulePort {
     public static final int CONST_X = -3;
 
     private final String name;     // puedes intern() si hay muchos iguales
-    private final Direction dir;
+    private final PortDirection dir;
     private final int[] netIds;    // LSB→MSB; >=0 net real, <0 constante
 
-    public ModulePort(String name, Direction dir, int[] netIds) {
+    public ModulePort(String name, PortDirection dir, int[] netIds) {
         this.name = name.intern();
         this.dir  = dir;
         this.netIds = netIds;
     }
 
     public String name()          { return name; }
-    public Direction direction()  { return dir; }
+    public PortDirection direction()  { return dir; }
     public int[] netIds()        { return netIds; }
     public int width()            { return netIds.length; }
     public int netIdAt(int i)     { return netIds[i]; }
