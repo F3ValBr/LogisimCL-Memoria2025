@@ -344,8 +344,8 @@ public final class VerilogJsonImporter {
                     for (VerilogCell cell : mod.cells()) {
                         if (cellAlias.containsKey(cell)) continue;
                         ElkNode n = elk.cellNode.get(cell);
-                        int x = (n == null) ? MIN_X : (int) Math.round(n.getX());
-                        int y = (n == null) ? MIN_Y : (int) Math.round(n.getY());
+                        int x = (n == null) ? snap(MIN_X) : snap((int) Math.round(n.getX()));
+                        int y = (n == null) ? snap(MIN_Y) : snap((int) Math.round(n.getY()));
                         InstanceHandle h = adapter.create(proj, newCirc, g, cell, Location.create(x + SEPARATION_INPUT_CELLS, y));
                         cellHandles.put(cell, h);
                     }
