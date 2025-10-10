@@ -13,7 +13,7 @@ import java.util.List;
  *  - BitLabeledTunnel.ATTR_OUTPUT (Boolean)
  * Compatible con Logisim 2.7.1 (getAttributes() -> Attribute[])
  */
-class BitLabeledTunnelAttributes extends com.cburch.logisim.std.wiring.TunnelAttributes {
+class BitLabeledTunnelAttributes extends TunnelAttributes {
     // ===== Atributos extra =====
     private String  bitSpecs = "";
     private Boolean output   = Boolean.FALSE;
