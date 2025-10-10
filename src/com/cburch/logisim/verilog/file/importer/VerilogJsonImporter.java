@@ -17,10 +17,10 @@ import com.cburch.logisim.std.arith.ArithmeticPortMapRegister;
 import com.cburch.logisim.std.gates.GatesPortMapRegister;
 import com.cburch.logisim.std.memory.MemoryPortMapRegister;
 import com.cburch.logisim.std.plexers.PlexersPortMapRegister;
+import com.cburch.logisim.std.wiring.Constant;
 import com.cburch.logisim.std.wiring.Pin;
 import com.cburch.logisim.std.wiring.Tunnel;
 import com.cburch.logisim.std.yosys.YosysComponentsPortMapRegister;
-import com.cburch.logisim.tools.Library;
 import com.cburch.logisim.verilog.comp.CellFactoryRegistry;
 import com.cburch.logisim.verilog.comp.auxiliary.*;
 import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
@@ -957,8 +957,7 @@ public final class VerilogJsonImporter {
             // 2) Prepara Constant (attrs) con WIDTH y VALUE
             LogisimFile lf = proj.getLogisimFile();
             if (lf == null) return;
-            Library wiring = lf.getLibrary("Wiring");
-            ComponentFactory constF = FactoryLookup.findFactory(wiring, "Constant");
+            ComponentFactory constF = Constant.FACTORY;
             if (constF == null) return;
 
             AttributeSet a = constF.createAttributeSet();
