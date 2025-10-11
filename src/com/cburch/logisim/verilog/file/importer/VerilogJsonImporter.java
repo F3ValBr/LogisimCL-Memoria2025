@@ -473,8 +473,6 @@ public final class VerilogJsonImporter {
             attrs.setValue(StdAttr.FACING, WEST);
             attrs.setValue(StdAttr.LABEL, p.name());
 
-            int y = outY.getOrDefault(p, snap((minY + maxY) / 2));
-            Location loc = Location.create(snap(xOutputs), y - 10);
             Location loc = Location.create(snap(xOutputs), snap(curOutY));
             curOutY += outStep;
 
