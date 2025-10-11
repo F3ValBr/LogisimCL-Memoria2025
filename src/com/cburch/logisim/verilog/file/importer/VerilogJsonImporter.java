@@ -410,10 +410,10 @@ public final class VerilogJsonImporter {
         for (VerilogCell c : mod.cells()) {
             ElkNode n = elk.cellNode.get(c);
             if (n == null) continue;
-            int x0 = (int)Math.round(n.getX());
-            int y0 = (int)Math.round(n.getY());
-            int x1 = x0 + (int)Math.round(n.getWidth());
-            int y1 = y0 + (int)Math.round(n.getHeight());
+            int x0 = (int) Math.round(n.getX());
+            int y0 = (int) Math.round(n.getY());
+            int x1 = x0 + (int) Math.round(n.getWidth());
+            int y1 = y0 + (int) Math.round(n.getHeight());
             minX = Math.min(minX, x0);
             minY = Math.min(minY, y0);
             maxX = Math.max(maxX, x1);
@@ -427,65 +427,18 @@ public final class VerilogJsonImporter {
         final int xInputs  = snap(minX - PAD_X);
         final int xOutputs = snap(maxX + PAD_X);
 
-        // 3) Fila vertical para inputs (simple): repartir entre minY..maxY
+        // 3) Particionar puertos
         List<ModulePort> inputs  = mod.ports().stream()
                 .filter(p -> p.direction() == PortDirection.INPUT).toList();
         List<ModulePort> outputs = mod.ports().stream()
                 .filter(p -> p.direction() == PortDirection.OUTPUT).toList();
 
+        // 4) Espaciado vertical uniforme para ambos lados
         int spanY = Math.max(1, maxY - minY);
+
+        // ---- Inputs (izquierda, EAST) ----
         int inStep = Math.max(GRID, spanY / Math.max(1, inputs.size() + 1));
         int curInY = minY + inStep;
-
-        // 4) Para outputs, calculamos Y a partir de los nodos internos conectados
-        Map<ModulePort, Integer> outY = new HashMap<>();
-        for (ModulePort p : outputs) {
-            // Recolectar Y de nodos internos conectados a CUALQUIER bit del puerto
-            List<Integer> ys = new ArrayList<>();
-
-            // Para cada net del módulo, si contiene un endpoint top de este puerto, añade
-            for (int netId : netIdx.netIds()) {
-                List<Integer> refs = netIdx.endpointsOf(netId);
-                if (refs == null || refs.isEmpty()) continue;
-
-                boolean touches = false;
-                for (int ref : refs) {
-                    if (ModuleNetIndex.isTop(ref)) {
-                        int pIdx = netIdx.resolveTopPortIdx(ref);
-                        if (pIdx >= 0 && pIdx < mod.ports().size() && mod.ports().get(pIdx) == p) {
-                            touches = true;
-                            break;
-                        }
-                    }
-                }
-                if (!touches) continue;
-
-                // Extrae Y de los endpoints internos de esta net
-                for (int ref : refs) {
-                    if (!ModuleNetIndex.isTop(ref)) {
-                        int cellIdx = ModuleNetIndex.ownerIdx(ref);
-                        VerilogCell cell = mod.cells().get(cellIdx);
-                        ElkNode n = elk.cellNode.get(cell);
-                        if (n != null) {
-                            int y = snap((int)Math.round(n.getY() + n.getHeight()/2.0));
-                            ys.add(y);
-                        }
-                    }
-                }
-            }
-
-            if (!ys.isEmpty()) {
-                ys.sort(Integer::compare);
-                int y, m = ys.size();
-                y = (m % 2 == 1) ? ys.get(m/2) : (ys.get(m/2 - 1) + ys.get(m/2)) / 2;
-                outY.put(p, snap(y));
-            } else {
-                // Fallback: centro vertical del bloque
-                outY.put(p, snap((minY + maxY) / 2));
-            }
-        }
-
-        // Inputs
         for (ModulePort p : inputs) {
             ComponentFactory pinFactory = Pin.FACTORY;
             AttributeSet attrs = pinFactory.createAttributeSet();
@@ -507,7 +460,9 @@ public final class VerilogJsonImporter {
             }
         }
 
-        // Outputs
+        // ---- Outputs (derecha, WEST) — MISMO CRITERIO UNIFORME ----
+        int outStep = Math.max(GRID, spanY / Math.max(1, outputs.size() + 1));
+        int curOutY = minY + outStep;
         for (ModulePort p : outputs) {
             ComponentFactory pinFactory = Pin.FACTORY;
             AttributeSet attrs = pinFactory.createAttributeSet();
@@ -520,6 +475,8 @@ public final class VerilogJsonImporter {
 
             int y = outY.getOrDefault(p, snap((minY + maxY) / 2));
             Location loc = Location.create(snap(xOutputs), y - 10);
+            Location loc = Location.create(snap(xOutputs), snap(curOutY));
+            curOutY += outStep;
 
             try {
                 Component comp = addComponentSafe(proj, circuit, g, pinFactory, loc, attrs);
