@@ -170,38 +170,70 @@ public class BitLabeledTunnel extends InstanceFactory {
         paintGhost(painter);
         g.translate(-x, -y);
 
-        // --- Puertos (API de painter los dibuja en coords globales) ---
+        // --- Puertos ---
         painter.drawPorts();
 
-        // --- Overlay de error: constantes en modo INPUT ---
+        // --- Overlays de advertencia ---
         AttributeSet atts = painter.getAttributeSet();
         BitWidth bw = atts.getValue(StdAttr.WIDTH);
         int w = Math.max(1, bw.getWidth());
 
         String csv = atts.getValue(BIT_SPECS);
-        java.util.List<String> specsVis = parseSpecs(csv == null ? "" : csv, w);
+        String csvSafe = (csv == null) ? "" : csv;
+
+        // Conteo REAL de tokens para detectar mismatch (antes de pad/trunc)
+        int tokenCount = 0;
+        if (!csvSafe.trim().isEmpty()) {
+            String[] toksRaw = csvSafe.split(",");
+            for (String t : toksRaw) {
+                if (t != null && !t.trim().isEmpty()) tokenCount++;
+            }
+        }
+
+        // Specs ya normalizados para otras comprobaciones visuales
+        List<String> specsVis = parseSpecs(csvSafe, w);
 
         boolean isOutput = Boolean.TRUE.equals(atts.getValue(ATTR_OUTPUT));
+
+        // Advertencia 1: constantes en modo INPUT
         boolean hasConst = false;
         for (String s : specsVis) {
             if ("0".equals(s) || "1".equals(s)) { hasConst = true; break; }
         }
 
-        if (!isOutput && hasConst) {
-            // Bounds del túnel están en coords locales; convertimos a absolutas sumando (x,y)
-            Bounds b = getOffsetBounds(atts);
-            int ex = x + b.getX() - 7; // un poco más grande y visible
-            int ey = y + b.getY() - 7;
+        // Advertencia 2: longitud CSV != WIDTH
+        boolean lenMismatch = (tokenCount != w);
 
-            // Dibujamos un punto rojo con "!" encima
+        // Bounds locales → absolutos
+        Bounds b = getOffsetBounds(atts);
+        int absX = x + b.getX();
+        int absY = y + b.getY();
+        int bbW  = b.getWidth();
+
+        // Dibuja “!” rojo (constantes en INPUT)
+        if (!isOutput && hasConst) {
             Color old = g.getColor();
             g.setColor(Color.RED);
-            g.fillOval(ex, ey, 14, 14);
+            g.fillOval(absX - 7, absY - 7, 14, 14);
             g.setColor(Color.WHITE);
-            g.drawString("!", ex + 4, ey + 12);
+            g.drawString("!", absX - 7 + 4, absY - 7 + 12);
+            g.setColor(old);
+        }
+
+        // Dibuja “?” naranja (mismatch de longitud CSV vs WIDTH)
+        if (lenMismatch) {
+            Color old = g.getColor();
+            // esquina superior derecha del polígono del túnel
+            int cx = absX + bbW - 7;
+            int cy = absY - 7;
+            g.setColor(new Color(255, 140, 0)); // naranja
+            g.fillOval(cx, cy, 14, 14);
+            g.setColor(Color.WHITE);
+            g.drawString("?", cx + 3, cy + 12);
             g.setColor(old);
         }
     }
+
 
     /* ============== Configuración de instancia/atributos ============== */
 

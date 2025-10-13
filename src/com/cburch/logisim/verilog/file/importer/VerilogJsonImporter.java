@@ -35,6 +35,7 @@ import com.cburch.logisim.verilog.file.materializer.ModuleMaterializer;
 import com.cburch.logisim.verilog.file.ui.ImportCompletionDialog;
 import com.cburch.logisim.verilog.file.ui.MissingModuleDialog;
 import com.cburch.logisim.verilog.file.ui.NavigationHelper;
+import com.cburch.logisim.verilog.file.ui.WarningCollector;
 import com.cburch.logisim.verilog.layout.LayoutUtils;
 import com.cburch.logisim.verilog.layout.MemoryIndex;
 import com.cburch.logisim.verilog.layout.ModuleNetIndex;
@@ -61,6 +62,7 @@ import java.util.*;
 
 import static com.cburch.logisim.data.Direction.*;
 import static com.cburch.logisim.verilog.file.importer.ImporterUtils.*;
+import static com.cburch.logisim.verilog.file.ui.WarningCollector.showDetailsDialog;
 import static com.cburch.logisim.verilog.std.AbstractComponentAdapter.setParsedByName;
 
 public final class VerilogJsonImporter {
@@ -79,6 +81,7 @@ public final class VerilogJsonImporter {
             .register(new ModuleBlackBoxAdapter(createFileSystemMaterializer()))
             ;
     private final NodeSizer sizer = new DefaultNodeSizer(adapter);
+    private static final WarningCollector xWarnings = new WarningCollector();
 
     static final int GRID  = 10;
     static final int MIN_X = 100;
@@ -131,6 +134,31 @@ public final class VerilogJsonImporter {
                 }
             }
         }
+
+        // Al final de importInto(...)
+        if (xWarnings.hasWarnings()) {
+            javax.swing.SwingUtilities.invokeLater(() -> {
+                java.awt.Component parent = (proj.getFrame() != null) ? proj.getFrame() : null;
+
+                String summary = xWarnings.summary() + "\n\n" +
+                        "Esto puede producir salidas 'desconocidas' en simulación.\n" +
+                        "Causa típica: bits sin fuente, alta impedancia (Z) o 'x' en el JSON.";
+
+                String[] options = { "Ver detalles…", "OK" };
+                int sel = javax.swing.JOptionPane.showOptionDialog(
+                        parent,
+                        summary,
+                        "Advertencia: bits X detectados",
+                        javax.swing.JOptionPane.DEFAULT_OPTION,
+                        javax.swing.JOptionPane.WARNING_MESSAGE,
+                        null, options, options[1]
+                );
+                if (sel == 0) {
+                    showDetailsDialog(parent, "Detalles de bits X", xWarnings.details());
+                }
+            });
+        }
+
     }
 
     /* ===== Helpers ===== */
@@ -561,7 +589,7 @@ public final class VerilogJsonImporter {
             if (anc == null) continue;
 
             // Construir bitSpecs (LSB..MSB)
-            List<String> specs = buildBitSpecsForTopPort(p);
+            List<String> specs = buildBitSpecsForTopPort(mod.name(), p);
 
             boolean all01 = specs.stream().allMatch(s -> "0".equals(s) || "1".equals(s));
             if (all01) {
@@ -613,7 +641,7 @@ public final class VerilogJsonImporter {
                 if (pinLoc == null) continue;
 
                 // Specs por bit
-                List<String> specs = buildBitSpecsForCellPort(cell, portName);
+                List<String> specs = buildBitSpecsForCellPort(mod.name(), cell, portName);
                 String pretty = makeLabelForSpecs(specs);
 
                 // Dirección de puerto (INPUT/OUTPUT/INOUT) para decidir ATTR_OUTPUT
@@ -855,7 +883,7 @@ public final class VerilogJsonImporter {
     }
 
     // Devuelve CSV LSB..MSB con "0","1","x" o "N<id>"
-    private static List<String> buildBitSpecsForCellPort(VerilogCell cell, String portName) {
+    private static List<String> buildBitSpecsForCellPort(String moduleName, VerilogCell cell, String portName) {
         int w = Math.max(1, cell.portWidth(portName));
         PortEndpoint[] byIdx = new PortEndpoint[w];
         for (PortEndpoint ep : cell.endpoints()) {
@@ -866,31 +894,55 @@ public final class VerilogJsonImporter {
         List<String> specs = new ArrayList<>(w);
         for (int i = 0; i < w; i++) {
             PortEndpoint ep = byIdx[i];
-            if (ep == null) { specs.add("x"); continue; }
+            if (ep == null) {
+                // Falta endpoint → considéralo X y registra advertencia
+                specs.add("x");
+                xWarnings.addXBit(moduleName + " :: " + cell.name(), portName, i, "bit sin endpoint (indeterminado)");
+                continue;
+            }
             BitRef br = ep.getBitRef();
             if (br instanceof Const0) { specs.add("0"); continue; }
+
             String n = (br == null) ? "" : br.getClass().getSimpleName();
             if ("Const1".equals(n)) { specs.add("1"); continue; }
-            if ("ConstX".equals(n) || "ConstZ".equals(n)) { specs.add("x"); continue; }
+            if ("ConstX".equals(n) || "ConstZ".equals(n)) {
+                specs.add("x");
+                xWarnings.addXBit(moduleName + " :: " + cell.name(), portName, i, "endpoint constante X/Z");
+                continue;
+            }
 
             // Net
             Integer nid = ep.getNetIdOrNull();
-            specs.add(nid == null ? "x" : ("N" + nid));
+            if (nid == null) {
+                specs.add("x");
+                xWarnings.addXBit(moduleName + " :: " + cell.name(), portName, i, "endpoint sin netId (indeterminado)");
+            } else {
+                specs.add("N" + nid);
+            }
         }
         return specs;
     }
 
     // Para puertos TOP usando netIds() (enteros o constantes especiales)
-    private static List<String> buildBitSpecsForTopPort(ModulePort p) {
+    private static List<String> buildBitSpecsForTopPort(String moduleName, ModulePort p) {
         int w = Math.max(1, p.width());
         int[] arr = p.netIds();
         List<String> specs = new ArrayList<>(w);
         for (int i = 0; i < w; i++) {
-            int nid = (i < arr.length) ? arr[i] : ModulePort.CONST_X;
-            if (nid == ModulePort.CONST_0)      specs.add("0");
-            else if (nid == ModulePort.CONST_1) specs.add("1");
-            else if (nid == ModulePort.CONST_X) specs.add("x");
-            else specs.add("N" + nid);
+            int nid = (arr != null && i < arr.length) ? arr[i] : ModulePort.CONST_X;
+            switch (nid) {
+                case ModulePort.CONST_0 -> specs.add("0");
+                case ModulePort.CONST_1 -> specs.add("1");
+                default -> {
+                    // cualquier "no 0/1" podría ser net, X o Z
+                    if (nid >= 0) {
+                        specs.add("N" + nid);
+                    } else {
+                        specs.add("x");
+                        xWarnings.addXBit(moduleName, p.name(), i, "top-port con net no resuelta/indeterminada");
+                    }
+                }
+            }
         }
         return specs;
     }
