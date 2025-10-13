@@ -61,7 +61,7 @@ import java.util.*;
 
 import static com.cburch.logisim.data.Direction.*;
 import static com.cburch.logisim.verilog.file.importer.ImporterUtils.*;
-import static com.cburch.logisim.verilog.file.ui.WarningCollector.showDetailsDialog;
+import static com.cburch.logisim.verilog.file.ui.WarningCollector.showXWarningDialogLater;
 import static com.cburch.logisim.verilog.std.AbstractComponentAdapter.setParsedByName;
 import static com.cburch.logisim.verilog.std.adapters.ModuleBlackBoxAdapter.circuitHasAnyComponent;
 
@@ -81,7 +81,7 @@ public final class VerilogJsonImporter {
             .register(new ModuleBlackBoxAdapter(createFileSystemMaterializer()))
             ;
     private final NodeSizer sizer = new DefaultNodeSizer(adapter);
-    private static final WarningCollector xWarnings = new WarningCollector();
+    private final WarningCollector xWarnings = new WarningCollector();
 
     static final int GRID  = 10;
     static final int MIN_X = 100;
@@ -107,6 +107,8 @@ public final class VerilogJsonImporter {
                         new PlexersPortMapRegister(),
                         new YosysComponentsPortMapRegister()
                 ));
+
+        xWarnings.clear();
 
         // 1) Elegir archivo y recordar carpeta base
         var res = proj.getLogisimFile().getLoader().JSONImportChooserWithPath(proj.getFrame());
@@ -135,30 +137,9 @@ public final class VerilogJsonImporter {
             }
         }
 
-        // Al final de importInto(...)
         if (xWarnings.hasWarnings()) {
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                java.awt.Component parent = (proj.getFrame() != null) ? proj.getFrame() : null;
-
-                String summary = xWarnings.summary() + "\n\n" +
-                        "Esto puede producir salidas 'desconocidas' en simulación.\n" +
-                        "Causa típica: bits sin fuente, alta impedancia (Z) o 'x' en el JSON.";
-
-                String[] options = { "Ver detalles…", "OK" };
-                int sel = javax.swing.JOptionPane.showOptionDialog(
-                        parent,
-                        summary,
-                        "Advertencia: bits X detectados",
-                        javax.swing.JOptionPane.DEFAULT_OPTION,
-                        javax.swing.JOptionPane.WARNING_MESSAGE,
-                        null, options, options[1]
-                );
-                if (sel == 0) {
-                    showDetailsDialog(parent, "Detalles de bits X", xWarnings.details());
-                }
-            });
+            showXWarningDialogLater(proj, xWarnings);
         }
-
     }
 
     /* ===== Helpers ===== */
@@ -896,7 +877,7 @@ public final class VerilogJsonImporter {
     }
 
     // Devuelve CSV LSB..MSB con "0","1","x" o "N<id>"
-    private static List<String> buildBitSpecsForCellPort(String moduleName, VerilogCell cell, String portName) {
+    private List<String> buildBitSpecsForCellPort(String moduleName, VerilogCell cell, String portName) {
         int w = Math.max(1, cell.portWidth(portName));
         PortEndpoint[] byIdx = new PortEndpoint[w];
         for (PortEndpoint ep : cell.endpoints()) {
@@ -937,7 +918,7 @@ public final class VerilogJsonImporter {
     }
 
     // Para puertos TOP usando netIds() (enteros o constantes especiales)
-    private static List<String> buildBitSpecsForTopPort(String moduleName, ModulePort p) {
+    private List<String> buildBitSpecsForTopPort(String moduleName, ModulePort p) {
         int w = Math.max(1, p.width());
         int[] arr = p.netIds();
         List<String> specs = new ArrayList<>(w);
