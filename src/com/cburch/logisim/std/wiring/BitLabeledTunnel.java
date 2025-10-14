@@ -78,6 +78,10 @@ public class BitLabeledTunnel extends InstanceFactory {
         Direction facing = attrs.getFacing();
         String label = attrs.getLabel();
 
+        // Modo: OUTPUT => puerto en la punta (flecha hacia afuera)
+        //       INPUT  => puerto en la cola  (flecha hacia adentro)
+        boolean isOutput = Boolean.TRUE.equals(attrs.getValue(BitLabeledTunnel.ATTR_OUTPUT));
+
         Graphics g = painter.getGraphics();
         g.setFont(attrs.getFont());
         FontMetrics fm = g.getFontMetrics();
@@ -95,13 +99,20 @@ public class BitLabeledTunnel extends InstanceFactory {
         final int w  = bds.getWidth();
         final int h  = bds.getHeight();
 
-        // Geometría
-        int headDepth  = Math.max(10, (int)Math.round(h * 0.30));
-        int notchDepth = -Math.max(8,  (int)Math.round(h * 0.30));
+        double HEAD_RATIO = 0.18;
+        double TAIL_RATIO = 0.12;
+
+        // Geometría base
+        int headDepth  = Math.max(10, (int)Math.round(h * HEAD_RATIO));   // profundidad de la "punta"
+        int notchDepth = -Math.max(8,  (int)Math.round(h * TAIL_RATIO));  // muesca trasera
 
         // Limitar para que no se crucen
         int maxHead = Math.max(8, w - Math.abs(notchDepth) - 10);
         if (headDepth > maxHead) headDepth = maxHead;
+
+        // Para "INPUT": invertimos la orientación de dibujo (no el atributo),
+        // de modo que la cola quede en el punto de conexión visual.
+        Direction drawFacing = isOutput ? facing : facing.reverse();
 
         int[] xp, yp;
         int L = x0; // Left
@@ -109,26 +120,36 @@ public class BitLabeledTunnel extends InstanceFactory {
         int R = x0 + w; // Right
         int B = y0 + h; // Bottom
 
-        if (facing.equals(EAST)) {
+        if (drawFacing.equals(Direction.EAST)) {
             int M = (T + B) / 2;
-
             xp = new int[] {L + notchDepth, R - headDepth, R, R - headDepth, L + notchDepth, L};
             yp = new int[] {T, T, M, B, B, M};
-        } else if (facing.equals(WEST)) {
+        } else if (drawFacing.equals(Direction.WEST)) {
             int M = (T + B) / 2;
-
             xp = new int[] {R - notchDepth, L + headDepth, L, L + headDepth, R - notchDepth, R};
             yp = new int[] {T, T, M, B, B, M};
-        } else if (facing.equals(NORTH)) {
+        } else if (drawFacing.equals(Direction.NORTH)) {
             int M = (L + R) / 2;
-
             xp = new int[] {L, L, M, R, R, (L + R) / 2};
             yp = new int[] {B - notchDepth, T + headDepth, T, T + headDepth, B - notchDepth, B};
-        } else {
+        } else { // SOUTH
             int M = (L + R) / 2;
-
             xp = new int[] {L, L, M, R, R, (L + R) / 2};
             yp = new int[] {T + notchDepth, B - headDepth, B, B - headDepth, T + notchDepth, T};
+        }
+
+        if (!isOutput) {
+            int tailShift = 3;
+
+            if (drawFacing.equals(EAST)) {// flecha hacia la derecha; cola en el lado izquierdo (pin)
+                for (int i = 0; i < xp.length; i++) xp[i] += tailShift;
+            } else if (drawFacing.equals(WEST)) {// flecha hacia la izquierda; cola a la derecha (pin)
+                for (int i = 0; i < xp.length; i++) xp[i] -= tailShift;
+            } else if (drawFacing.equals(NORTH)) {// flecha hacia arriba; cola abajo (pin)
+                for (int i = 0; i < yp.length; i++) yp[i] -= tailShift;
+            } else if (drawFacing.equals(SOUTH)) {// flecha hacia abajo; cola arriba (pin)
+                for (int i = 0; i < yp.length; i++) yp[i] += tailShift;
+            }
         }
 
         // === Recalcular bounds según el polígono (para que la selección lo cubra) ===
@@ -147,10 +168,7 @@ public class BitLabeledTunnel extends InstanceFactory {
             if (inst != null) inst.recomputeBounds();
         }
 
-        // Colores diferenciados por modo OUTPUT/INPUT
-        boolean isOutput = Boolean.TRUE.equals(attrs.getValue(BitLabeledTunnel.ATTR_OUTPUT));
-        Color border = isOutput ? Color.BLUE.darker() : Color.GREEN.darker();
-
+        Color border = Color.BLACK;
         g.setColor(border);
         GraphicsUtil.switchToWidth(g, 2);
         g.drawPolygon(xp, yp, xp.length);
