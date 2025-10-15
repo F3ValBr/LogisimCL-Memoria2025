@@ -66,18 +66,53 @@ class CircuitWires {
 	}
 
     private class BitTunnelListener implements AttributeListener {
+        private boolean normalizing = false;
+
         @Override public void attributeListChanged(AttributeEvent e) { }
 
         @Override public void attributeValueChanged(AttributeEvent e) {
             Attribute<?> a = e.getAttribute();
-            // Cambios que afectan al cableado / modo y deben recomputar bundles
-            if (a == StdAttr.LABEL
-                    || a == com.cburch.logisim.std.wiring.BitLabeledTunnel.BIT_SPECS
-                    || a == com.cburch.logisim.std.wiring.BitLabeledTunnel.ATTR_OUTPUT
+
+            // 1) BIT_SPECS: normaliza y/o invalida el bundle map
+            if (a == BitLabeledTunnel.BIT_SPECS) {
+                if (!normalizing) {
+                    AttributeSet as = e.getSource();
+                    try {
+                        normalizing = true;
+                        String raw = as.getValue(BitLabeledTunnel.BIT_SPECS);
+                        String norm = normalizeCsv(raw);
+                        if (!java.util.Objects.equals(raw, norm)) {
+                            as.setValue(BitLabeledTunnel.BIT_SPECS, norm);
+                            return;
+                        }
+                    } finally {
+                        normalizing = false;
+                    }
+                }
+                voidBundleMap();
+                return;
+            }
+
+            // 2) Cambios que afectan al grafo/puerto
+            if (a == BitLabeledTunnel.ATTR_OUTPUT
                     || a == StdAttr.FACING
                     || a == StdAttr.WIDTH) {
                 voidBundleMap();
             }
+        }
+
+        private static String normalizeCsv(String csv) {
+            if (csv == null) return "";
+            String[] t = csv.split(",");
+            StringBuilder sb = new StringBuilder();
+            for (String s : t) {
+                String x = s.trim();
+                if (!x.isEmpty()) {
+                    if (!sb.isEmpty()) sb.append(',');
+                    sb.append(x);
+                }
+            }
+            return sb.toString();
         }
     }
 
@@ -149,13 +184,13 @@ class CircuitWires {
 	}
 
 	// user-given data
-	private HashSet<Wire> wires = new HashSet<Wire>();
-	private HashSet<Splitter> splitters = new HashSet<Splitter>();
+	private final HashSet<Wire> wires = new HashSet<Wire>();
+	private final HashSet<Splitter> splitters = new HashSet<Splitter>();
     private final HashSet<Component> bitTunnels = new HashSet<>(); // componentes con BitLabeledTunnel factory
     private final BitTunnelListener bitTunnelListener = new BitTunnelListener();
-    private HashSet<Component> tunnels = new HashSet<Component>(); // of Components with Tunnel factory
-	private TunnelListener tunnelListener = new TunnelListener();
-	private HashSet<Component> pulls = new HashSet<Component>(); // of Components with PullResistor factory
+    private final HashSet<Component> tunnels = new HashSet<Component>(); // of Components with Tunnel factory
+	private final TunnelListener tunnelListener = new TunnelListener();
+	private final HashSet<Component> pulls = new HashSet<Component>(); // of Components with PullResistor factory
 	final CircuitPoints points = new CircuitPoints();
 
 	// derived data
@@ -278,7 +313,7 @@ class CircuitWires {
 				pulls.remove(comp);
 				comp.getAttributeSet().removeAttributeListener(tunnelListener);
 			} else if (factory instanceof BitLabeledTunnel) {
-                bitTunnels.add(comp);
+                bitTunnels.remove(comp);
                 comp.getAttributeSet().addAttributeListener(bitTunnelListener);
             }
 		}
@@ -389,7 +424,7 @@ class CircuitWires {
 
 			Value bv = null;
 			if (!b.isValid() || b.threads == null) {
-				; // do nothing
+				// do nothing
 			} else if (b.threads.length == 1) {
 				bv = s.thr_values.get(b.threads[0]);
 			} else {
@@ -835,7 +870,7 @@ class CircuitWires {
 
         // Repositorios compartidos
         final Map<String, WireBundle> labelBundles = new HashMap<>();
-        final Map<String, WireBundle> constBundles = new HashMap<>(); // "C0","C1","CX"
+        final Map<String, WireBundle> constBundles = new HashMap<>(); // C0/C1/CX si lo necesitaras
 
         for (Component comp : bitTunnels) {
             EndData end = comp.getEnd(0);
@@ -850,45 +885,44 @@ class CircuitWires {
             final int width = Math.max(1, bw.getWidth());
             bltB.setWidth(bw, loc); // asegura threads del BLT
 
-            // Lee/normaliza CSV → specs[i]
-            AttributeSet a = comp.getAttributeSet();
+            // === Modo OUTPUT determina si el BLT "conduce" constantes ===
+            boolean isOutput = false;
+            try {
+                AttributeSet a = comp.getAttributeSet();
+                isOutput = Boolean.TRUE.equals(a.getValue(BitLabeledTunnel.ATTR_OUTPUT));
+            } catch (Throwable ignore) {}
+
+            // === Lee/normaliza CSV → specs[i] ===
             String csv = "";
             try {
-                String s = a.getValue(com.cburch.logisim.std.wiring.BitLabeledTunnel.BIT_SPECS);
+                String s = comp.getAttributeSet().getValue(BitLabeledTunnel.BIT_SPECS);
                 if (s != null) csv = s;
-            } catch (Throwable ignore) { }
-
+            } catch (Throwable ignore) {}
             final String[] toks = csv.split(",");
             final int usable = Math.min(width, toks.length);
             final String[] specs = new String[width];
-            for (int i = 0; i < width; i++) {
-                specs[i] = (i < usable ? toks[i].trim() : "x");
-            }
+            for (int i = 0; i < width; i++) specs[i] = (i < usable ? toks[i].trim() : "x");
 
             WireThread[] bltTh = bltB.threads;
             if (!bltB.isValid() || bltTh == null || bltTh.length < width) continue;
 
             for (int i = 0; i < width; i++) {
-                String t = specs[i];
-                if (t == null || t.isBlank()) continue;
+                String token = normalizeToken(specs[i]);
+                if (token.isEmpty()) continue;
 
-                // Normaliza token
-                String token = normalizeToken(t);
+                // ---- 1) CONSTANTES: solo si OUTPUT. Nunca pegamos pull en la coord real. ----
+                if ("0".equals(token) || "1".equals(token)) {
+                    if (!isOutput) continue; // en INPUT no conducimos constantes
 
-                // === Constantes per-bit: une con bundle 1-bit de pull ===
-                if ("0".equals(token) || "1".equals(token) || "x".equals(token)) {
-                    // Reutiliza por tipo: C0, C1, CX
-                    String key = "C" + token.toUpperCase(); // C0/C1/CX
+                    // Opción A: bundle compartido por tipo de constante (C0/C1)
+                    String key = "C" + token;
                     WireBundle cb = constBundles.get(key);
                     if (cb == null) {
-                        // Usa pseudo-loc único por clave
-                        Location pseudo = pseudoLocForLabel(key);
+                        Location pseudo = pseudoLocForLabel(key); // ya tienes este helper
                         cb = ret.getBundleAt(pseudo);
                         if (cb == null) cb = ret.createBundleAt(pseudo);
                         cb.setWidth(BitWidth.ONE, pseudo);
-                        // pull del bundle 1-bit
-                        Value pv = "0".equals(token) ? Value.FALSE : "1".equals(token) ? Value.TRUE : Value.UNKNOWN;
-                        cb.addPullValue(pv);
+                        cb.addPullValue("1".equals(token) ? Value.TRUE : Value.FALSE);
                         constBundles.put(key, cb);
                     }
                     WireThread[] ct = cb.threads;
@@ -898,13 +932,17 @@ class CircuitWires {
                     continue;
                 }
 
-                // === Labels/nets per-bit: une por token exacto (p.ej. N123) ===
+                // ‘x’: no conduzcas UNKNOWN (no pegamos pull ni unimos a nada)
+                if ("x".equalsIgnoreCase(token)) {
+                    continue;
+                }
+
+                // ---- 2) ETIQUETAS/NETS: une por token exacto (p.ej. N123, foo.bar[7]) ----
                 WireBundle lb = labelBundles.get(token);
                 if (lb == null) {
                     Location pseudo = pseudoLocForLabel(token);
                     lb = ret.getBundleAt(pseudo);
                     if (lb == null) lb = ret.createBundleAt(pseudo);
-                    // 1 bit por hilo “lógico” de etiqueta
                     lb.setWidth(BitWidth.ONE, pseudo);
                     labelBundles.put(token, lb);
                 }
@@ -921,19 +959,21 @@ class CircuitWires {
      *  - "N123" → "N123" (en mayúscula la 'N')
      *  - cualquier otra cosa → trim, tal cual (puedes endurecer aquí si quieres)
      */
-    private static String normalizeToken(String raw) {
-        String s = raw.trim();
-        if (s.equals("0") || s.equals("1")) return s;
-        if (s.equalsIgnoreCase("x")) return "x";
-        if (s.length() > 1 && (s.charAt(0) == 'n' || s.charAt(0) == 'N')) {
-            // N<num>
+    private static String normalizeToken(String t) {
+        if (t == null) return "";
+        t = t.trim();
+        if (t.isEmpty()) return "";
+        if ("0".equals(t) || "1".equals(t)) return t;
+        if ("x".equalsIgnoreCase(t)) return "x";
+        // Net etiquetado tipo "N123" → normaliza prefijo N y número
+        if (t.length() >= 2 && (t.charAt(0) == 'N' || t.charAt(0) == 'n')) {
             try {
-                int id = Integer.parseInt(s.substring(1).trim());
+                int id = Integer.parseInt(t.substring(1).trim());
                 return "N" + id;
-            } catch (Exception ignore) {
-                // cae a genérico
+            } catch (NumberFormatException ignore) {
+                // No es N<num>, devuélvelo tal cual normalizado en espacios
             }
         }
-        return s;
+        return t;
     }
 }

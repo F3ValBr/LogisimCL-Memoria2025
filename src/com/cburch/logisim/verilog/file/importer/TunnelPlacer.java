@@ -5,6 +5,7 @@ import com.cburch.logisim.comp.Component;
 import com.cburch.logisim.comp.EndData;
 import com.cburch.logisim.data.*;
 import com.cburch.logisim.instance.StdAttr;
+import com.cburch.logisim.std.wiring.BitLabeledTunnel;
 import com.cburch.logisim.verilog.comp.auxiliary.*;
 import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
 import com.cburch.logisim.verilog.comp.impl.VerilogCell;
@@ -119,19 +120,21 @@ final class TunnelPlacer {
 
         batch.add(Wire.create(kLoc, mouth));
 
-        AttributeSet a = com.cburch.logisim.std.wiring.BitLabeledTunnel.FACTORY.createAttributeSet();
+        BitLabeledTunnel bltFactory = BitLabeledTunnel.FACTORY;
+
+        AttributeSet a = bltFactory.createAttributeSet();
         a.setValue(StdAttr.WIDTH, BitWidth.create(Math.max(1, width)));
-        a.setValue(com.cburch.logisim.std.wiring.BitLabeledTunnel.BIT_SPECS, String.join(",", bitSpecs));
-        a.setValue(com.cburch.logisim.std.wiring.BitLabeledTunnel.ATTR_OUTPUT, attrOutput && (facing != Direction.WEST));
+        a.setValue(BitLabeledTunnel.BIT_SPECS, String.join(",", bitSpecs));
+        a.setValue(BitLabeledTunnel.ATTR_OUTPUT, attrOutput && (facing != Direction.WEST));
         a.setValue(StdAttr.FACING, facing);
         if (label != null && !label.isBlank()) a.setValue(StdAttr.LABEL, label);
 
-        Component probe = com.cburch.logisim.std.wiring.BitLabeledTunnel.FACTORY.createComponent(Location.create(0, 0), a);
+        Component probe = bltFactory.createComponent(Location.create(0, 0), a);
         EndData end0 = probe.getEnd(0);
         int offX = end0.getLocation().getX() - probe.getLocation().getX();
         int offY = end0.getLocation().getY() - probe.getLocation().getY();
         Location tunLoc = Location.create(kLoc.getX() - offX, kLoc.getY() - offY);
 
-        batch.add(com.cburch.logisim.std.wiring.BitLabeledTunnel.FACTORY.createComponent(tunLoc, a));
+        batch.add(bltFactory.createComponent(tunLoc, a));
     }
 }
