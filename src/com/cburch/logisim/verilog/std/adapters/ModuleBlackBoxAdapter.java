@@ -94,6 +94,7 @@ public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
             }
 
             PortGeom pg = PortGeom.of(comp, nameToIdx);
+            g.dispose();
             return new InstanceHandle(comp, pg);
         } catch (CircuitException e) {
             throw new IllegalStateException("No se pudo añadir subcircuito: " + e.getMessage(), e);

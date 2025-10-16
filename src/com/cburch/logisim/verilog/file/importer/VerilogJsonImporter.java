@@ -115,6 +115,8 @@ public final class VerilogJsonImporter {
         if (xWarnings.hasWarnings()) {
             showXWarningDialogLater(proj, xWarnings);
         }
+
+        netlist = null;
     }
 
     /* ===== Materializer ===== */

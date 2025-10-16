@@ -314,7 +314,7 @@ class CircuitWires {
 				comp.getAttributeSet().removeAttributeListener(tunnelListener);
 			} else if (factory instanceof BitLabeledTunnel) {
                 bitTunnels.remove(comp);
-                comp.getAttributeSet().addAttributeListener(bitTunnelListener);
+                comp.getAttributeSet().removeAttributeListener(bitTunnelListener);
             }
 		}
 		points.remove(comp);

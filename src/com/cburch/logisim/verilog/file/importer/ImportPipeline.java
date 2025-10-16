@@ -108,41 +108,54 @@ final class ImportPipeline {
 
             // Layout
             LayoutBuilder.Result elk = LayoutBuilder.build(proj, mod, netIndex, sizer, alias);
-            LayoutRunner.run(elk.root);
-            LayoutUtils.applyLayoutAndClamp(elk.root, layout.minX(), layout.minY());
+            try {
+                LayoutRunner.run(elk.root);
+                LayoutUtils.applyLayoutAndClamp(elk.root, layout.minX(), layout.minY());
 
-            // Check if circuit already has components
-            Circuit target = byModule.get(dto.name());
-            Map<VerilogCell, InstanceHandle> cellHandles = new HashMap<>();
-            Map<ModulePort, LayoutServices.PortAnchor> topAnchors = new HashMap<>();
-            layout.addModulePins(proj, target, mod, elk, g, topAnchors);
+                // Check if circuit already has components
+                Circuit target = byModule.get(dto.name());
+                Map<VerilogCell, InstanceHandle> cellHandles = new HashMap<>();
+                Map<ModulePort, LayoutServices.PortAnchor> topAnchors = new HashMap<>();
+                layout.addModulePins(proj, target, mod, elk, g, topAnchors);
 
-            // Putting cells in the circuit
-            int totalCells = 0;
-            for (int i = 0; i < mod.cells().size(); i++) {
-                VerilogCell cell = mod.cells().get(i);
-                if (alias.containsKey(cell)) continue;
-                ElkNode n = elk.cellNode.get(cell);
-                int x = (n == null) ? layout.minX() : ImporterUtils.Geom.snap((int) Math.round(n.getX()));
-                int y = (n == null) ? layout.minY() : ImporterUtils.Geom.snap((int) Math.round(n.getY()));
-                // Move cells down if there are multiple in the same position
-                InstanceHandle h = adapter.create(proj, target, g, cell,
-                        Location.create(x + layout.separationInputCells(), y + 10));
-                cellHandles.put(cell, h);
-                totalCells++;
+                // Putting cells in the circuit
+                int totalCells = 0;
+                for (int i = 0; i < mod.cells().size(); i++) {
+                    VerilogCell cell = mod.cells().get(i);
+                    if (alias.containsKey(cell)) continue;
+                    ElkNode n = elk.cellNode.get(cell);
+                    int x = (n == null) ? layout.minX() : ImporterUtils.Geom.snap((int) Math.round(n.getX()));
+                    int y = (n == null) ? layout.minY() : ImporterUtils.Geom.snap((int) Math.round(n.getY()));
+                    // Move cells down if there are multiple in the same position
+                    InstanceHandle h = adapter.create(proj, target, g, cell,
+                            Location.create(x + layout.separationInputCells(), y + 10));
+                    cellHandles.put(cell, h);
+                    totalCells++;
+                }
+
+                // Place tunnels and constants
+                ImportBatch batch = new ImportBatch(target);
+
+                tunnels.place(batch, mod, cellHandles, topAnchors, g, specs);
+                constants.place(batch, proj, mod, cellHandles, topAnchors, g, specs);
+
+                batch.commit(proj, "addComponentsFromImportAction");
+
+                alias.clear();
+                cellHandles.clear();
+                topAnchors.clear();
+
+                System.out.println("Total de celdas procesadas: " + totalCells);
+                System.out.println("Done.");
+
+            } finally {
+                try { org.eclipse.emf.ecore.util.EcoreUtil.delete(elk.root, true); } catch (Exception ex) { /* ignore */ }
+                elk.cellNode.clear();
+                elk.portNode.clear();
+                elk.root = null;
             }
-
-            // Place tunnels and constants
-            ImportBatch batch = new ImportBatch(target);
-
-            tunnels.place(batch, mod, cellHandles, topAnchors, g, specs);
-            constants.place(batch, proj, mod, cellHandles, topAnchors, g, specs);
-
-            batch.commit(proj, "addComponentsFromImportAction");
-
-            System.out.println("Total de celdas procesadas: " + totalCells);
-            System.out.println("Done.");
         }
+        g.dispose();
         return main;
     }
 
@@ -165,37 +178,49 @@ final class ImportPipeline {
 
             // Layout
             LayoutBuilder.Result elk = LayoutBuilder.build(proj, mod, netIndex, sizer, alias);
-            LayoutRunner.run(elk.root);
-            LayoutUtils.applyLayoutAndClamp(elk.root, layout.minX(), layout.minY());
+            try {
+                LayoutRunner.run(elk.root);
+                LayoutUtils.applyLayoutAndClamp(elk.root, layout.minX(), layout.minY());
 
-            // Check if circuit already has components
-            Circuit target = ImporterUtils.Components.ensureCircuit(proj, moduleName);
-            if (circuitHasAnyComponent(target)) return;
+                // Check if circuit already has components
+                Circuit target = ImporterUtils.Components.ensureCircuit(proj, moduleName);
+                if (circuitHasAnyComponent(target)) return;
 
-            // Putting cells in the circuit
-            Map<VerilogCell, InstanceHandle> cellHandles = new HashMap<>();
-            Map<ModulePort, LayoutServices.PortAnchor> topAnchors = new HashMap<>();
-            layout.addModulePins(proj, target, mod, elk, g, topAnchors);
+                // Putting cells in the circuit
+                Map<VerilogCell, InstanceHandle> cellHandles = new HashMap<>();
+                Map<ModulePort, LayoutServices.PortAnchor> topAnchors = new HashMap<>();
+                layout.addModulePins(proj, target, mod, elk, g, topAnchors);
 
-            // Cells
-            for (VerilogCell cell : mod.cells()) {
-                if (alias.containsKey(cell)) continue;
-                ElkNode n = elk.cellNode.get(cell);
-                int x = (n == null) ? layout.minX() : ImporterUtils.Geom.snap((int) Math.round(n.getX()));
-                int y = (n == null) ? layout.minY() : ImporterUtils.Geom.snap((int) Math.round(n.getY()));
-                InstanceHandle h = adapter.create(proj, target, g, cell,
-                        Location.create(x + layout.separationInputCells(), y));
-                cellHandles.put(cell, h);
+                // Cells
+                for (VerilogCell cell : mod.cells()) {
+                    if (alias.containsKey(cell)) continue;
+                    ElkNode n = elk.cellNode.get(cell);
+                    int x = (n == null) ? layout.minX() : ImporterUtils.Geom.snap((int) Math.round(n.getX()));
+                    int y = (n == null) ? layout.minY() : ImporterUtils.Geom.snap((int) Math.round(n.getY()));
+                    InstanceHandle h = adapter.create(proj, target, g, cell,
+                            Location.create(x + layout.separationInputCells(), y));
+                    cellHandles.put(cell, h);
+                }
+
+                // Place tunnels and constants
+                ImportBatch batch = new ImportBatch(target);
+
+                tunnels.place(batch, mod, cellHandles, topAnchors, g, specs);
+                constants.place(batch, proj, mod, cellHandles, topAnchors, g, specs);
+
+                batch.commit(proj, "materializeModuleAction");
+
+                alias.clear();
+                cellHandles.clear();
+                topAnchors.clear();
+
+                return;
+            } finally {
+                g.dispose();
+                try { org.eclipse.emf.ecore.util.EcoreUtil.delete(elk.root, true); } catch (Exception ex) { /* ignore */ }
+                elk.cellNode.clear();
+                elk.root = null;
             }
-
-            // Place tunnels and constants
-            ImportBatch batch = new ImportBatch(target);
-
-            tunnels.place(batch, mod, cellHandles, topAnchors, g, specs);
-            constants.place(batch, proj, mod, cellHandles, topAnchors, g, specs);
-
-            batch.commit(proj, "materializeModuleAction");
-            return;
         }
     }
 }

@@ -21,7 +21,7 @@ import java.util.List;
 public final class LayoutBuilder {
 
     public static class Result {
-        public final ElkNode root;
+        public ElkNode root;
         public final Map<VerilogCell, ElkNode> cellNode = new HashMap<>();
         public final Map<ModulePort, ElkNode>  portNode = new HashMap<>();
         public Result(ElkNode root){ this.root = root; }
