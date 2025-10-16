@@ -71,6 +71,20 @@ public class PokeTool extends Tool {
         private final Component comp;
         private final int anchorX, anchorY;
 
+        // --- highlight de coincidencias ---
+        private static final class LineHit {
+            Rectangle r;
+            int bitIndex;
+            String token;
+            LineHit(Rectangle r, int bitIndex, String token) { this.r = r; this.bitIndex = bitIndex; this.token = token; }
+        }
+        record Row(String text, boolean clickable, String token, int bitIndex) { }
+
+        private final java.util.List<LineHit> hits = new java.util.ArrayList<>();
+        private final java.util.List<Component> matched = new java.util.ArrayList<>();
+        private Bounds liveBounds = Bounds.EMPTY_BOUNDS;
+        private final Rectangle tipRect = new Rectangle();
+
         BitTunnelCaret(Canvas canvas, Component comp, int x, int y) {
             this.canvas = canvas;
             this.comp = comp;
@@ -126,35 +140,50 @@ public class PokeTool extends Tool {
             g2.setColor(oldC);
             g2.setComposite(oldComp);
 
-            // ---------- 3) Texto del tooltip ----------
-            java.util.List<String> lines = new java.util.ArrayList<>();
-            lines.add(Strings.get("BLTname") + " " + (!label.isBlank() ? label : "not labeled"));
-            lines.add(Strings.get("BLTmode") + " " + (outMode ? "[OUTPUT]" : "[INPUT]") + ", " +  Strings.get("BLTwidth") + " = " + w);
-            lines.add(Strings.get("BLTvalue") + " " + toBinStringMSBFirst(bus));
+            // ---------- 3) Construcción de filas con metadatos ----------
 
+            java.util.List<Row> rows = new java.util.ArrayList<>();
+
+            rows.add(new Row(Strings.get("BLTname") + " " + (!label.isBlank() ? label : "not labeled"),
+                    false, "", -1));
+            rows.add(new Row(Strings.get("BLTmode") + " " + (outMode ? "[OUTPUT]" : "[INPUT]") + ", "
+                    + Strings.get("BLTwidth") + " = " + w,
+                    false, "", -1));
+            rows.add(new Row(Strings.get("BLTvalue") + " " + toBinStringMSBFirst(bus),
+                    false, "", -1));
+
+            // Warning opcional (NO clickeable)
             int csvCount = (csv == null || csv.isBlank()) ? 0 : csv.split(",").length;
             if (csvCount > 0 && csvCount != w) {
-                lines.add("⚠ specs vs width: " + csvCount + " != " + w);
-            }
-            lines.add(Strings.get("BLTbitdefs"));
-            for (int i = 0; i < w; i++) {
-                String spec = prettySpec(specs.get(i));
-                String bitv = bitChar(bus.get(i));
-                lines.add("  b" + i + ": " + spec + " -> " + bitv);
+                rows.add(new Row("WARN: specs vs width: " + csvCount + " != " + w, false, "", -1));
             }
 
-            // Medidas del cuadro
+            // Título de sección
+            rows.add(new Row(Strings.get("BLTbitdefs"), false, "", -1));
+
+            // Filas por bit (SÍ clickeables)
+            for (int i = 0; i < w; i++) {
+                String spec  = specs.get(i);             // crudo (0/1/x/N…)
+                String pSpec = prettySpec(spec);         // legible
+                String bitv  = bitChar(bus.get(i));
+                String tok   = norm(spec);               // normalizado para matching
+                String line  = "  b" + i + ": " + pSpec + " -> " + bitv;
+                rows.add(new Row(line, true, tok, i));
+            }
+
+            // ---------- 4) Medidas del cuadro ----------
             Font oldF = g.getFont();
             g.setFont(new Font("monospaced", Font.PLAIN, 12));
             FontMetrics fm = g.getFontMetrics();
-            int textW = 0; for (String s : lines) textW = Math.max(textW, fm.stringWidth(s));
+            int textW = 0;
+            for (Row r : rows) textW = Math.max(textW, fm.stringWidth(r.text));
             int textH = fm.getAscent() + fm.getDescent();
 
             final int PAD = 6;
             int boxW = textW + PAD * 2;
-            int boxH = (textH * lines.size()) + PAD * 2;
+            int boxH = (textH * rows.size()) + PAD * 2;
 
-            // ---------- 4) Posicionamiento dentro del viewport ----------
+            // ---------- 5) Posicionamiento dentro del viewport ----------
             final int GAP = 12;  // separación del componente
             int bx, by;
 
@@ -166,38 +195,27 @@ public class PokeTool extends Tool {
                     bx = b.getX() + b.getWidth() + GAP;
                     by = b.getY();
                 } else if (facing.equals(WEST)) {
-                    bx = b.getX() - GAP - 1;
+                    bx = b.getX() - (boxW + GAP);
                     by = b.getY();
                 } else if (facing.equals(NORTH)) {
                     bx = b.getX();
-                    by = b.getY() - GAP - 1;
-                } else if (facing.equals(SOUTH)) {
+                    by = b.getY() - (boxH + GAP);
+                } else { // SOUTH
                     bx = b.getX();
                     by = b.getY() + b.getHeight() + GAP;
-                } else {
-                    bx = b.getX() + b.getWidth() + GAP;
-                    by = b.getY();
                 }
             }
 
             // Rectángulo visible de ESTA pasada de pintura
             java.awt.Rectangle clip = g.getClipBounds();
             if (clip == null || clip.width <= 0 || clip.height <= 0) {
-                // Fallback: visibleRect del canvas
                 clip = canvas.getVisibleRect();
                 if (clip == null || clip.width <= 0 || clip.height <= 0) {
-                    // Último recurso: tamaño total del canvas
                     clip = new java.awt.Rectangle(0, 0, canvas.getWidth(), canvas.getHeight());
                 }
             }
 
-            // Si el facing nos dejó “del lado izquierdo” (WEST/NORTH) restamos el tamaño de la caja
-            if (anchorX == Integer.MIN_VALUE || anchorY == Integer.MIN_VALUE) {
-                if (facing == Direction.WEST)  bx = b.getX() - (boxW + GAP);
-                if (facing == Direction.NORTH) by = b.getY() - (boxH + GAP);
-            }
-
-            // Intento de “flip” si no cabe en el clip
+            // Intento de “flip” si no cabe, luego clamp
             final int MARGIN = 4;
             int clipMinX = clip.x + MARGIN;
             int clipMinY = clip.y + MARGIN;
@@ -222,38 +240,95 @@ public class PokeTool extends Tool {
                 if (alt + boxH <= clipMaxY) by = alt;
             }
 
-            // Clamp final dentro del clip (por si el componente ocupa casi todo)
+            // Clamp final
             if (bx + boxW > clipMaxX) bx = clipMaxX - boxW;
             if (by + boxH > clipMaxY) by = clipMaxY - boxH;
             if (bx < clipMinX) bx = clipMinX;
             if (by < clipMinY) by = clipMinY;
 
+            // ---------- 6) Pintado del tooltip + generación de hit-boxes ----------
+            hits.clear();
 
-            // ---------- 5) Dibujar tooltip ----------
             g.setColor(caretColor);
             g.fillRoundRect(bx, by, boxW, boxH, 8, 8);
             g.setColor(Color.DARK_GRAY);
             g.drawRoundRect(bx, by, boxW, boxH, 8, 8);
 
-            g.setColor(Color.BLACK);
             int ty = by + PAD + fm.getAscent();
-            for (String s : lines) {
-                g.drawString(s, bx + PAD, ty);
+            g.setColor(Color.BLACK);
+            for (Row r : rows) {
+                g.drawString(r.text, bx + PAD, ty);
+
+                if (r.clickable && r.token != null && !r.token.isBlank()) {
+                    // rectángulo de click para toda la fila (con coords ya flipp/clampeadas)
+                    Rectangle rr = new Rectangle(bx + 2, ty - fm.getAscent(), boxW - 4, textH);
+                    hits.add(new LineHit(rr, r.bitIndex, r.token));
+                }
                 ty += textH;
             }
 
             g.setFont(oldF);
+
+            // Guarda rect y bounds vivos para el PokeTool
+            tipRect.setBounds(bx, by, boxW, boxH);
+            Bounds tipB = Bounds.create(bx, by, boxW, boxH);
+            Bounds compB = comp.getBounds(g);
+            liveBounds = (compB == null) ? tipB : tipB.add(compB).expand(2);
+
+            // --- Pintar halos para todos los BLT "matched" (si hay) ---
+            if (!matched.isEmpty()) {
+                Graphics2D g2m = (Graphics2D) g;
+                Stroke oldS2 = g2m.getStroke();
+                Color oldC2 = g2m.getColor();
+                Composite oldCp2 = g2m.getComposite();
+
+                g2m.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.18f));
+                g2m.setColor(new Color(255, 200, 0, 90));   // relleno ámbar
+                for (Component mc : matched) {
+                    Bounds mb = mc.getBounds(g);
+                    g2m.fillRoundRect(mb.getX()-2, mb.getY()-2, mb.getWidth()+4, mb.getHeight()+4, 10, 10);
+                }
+
+                g2m.setComposite(AlphaComposite.SrcOver);
+                g2m.setStroke(new BasicStroke(3f));
+                g2m.setColor(new Color(255, 170, 0, 220)); // borde ámbar
+                for (Component mc : matched) {
+                    Bounds mb = mc.getBounds(g);
+                    g2m.drawRoundRect(mb.getX()-2, mb.getY()-2, mb.getWidth()+4, mb.getHeight()+4, 10, 10);
+                }
+
+                g2m.setStroke(oldS2);
+                g2m.setColor(oldC2);
+                g2m.setComposite(oldCp2);
+            }
         }
 
-        @Override public Bounds getBounds(Graphics g) { return Bounds.create(0,0,0,0); }
+        @Override public Bounds getBounds(Graphics g) {
+            if (liveBounds != Bounds.EMPTY_BOUNDS) return liveBounds;
+            Bounds b = (comp != null) ? comp.getBounds(g) : Bounds.EMPTY_BOUNDS;
+            return (b == null) ? Bounds.EMPTY_BOUNDS : b;
+        }
 
-        // ---- Helpers (copiados/compatibles con tu BitLabeledTunnel) ----
+        @Override
+        public void mousePressed(MouseEvent e) {
+            Point p = e.getPoint();
+            for (LineHit h : hits) {
+                if (h.r.contains(p)) {
+                    if (!h.token.isBlank()) highlightMatches(h.token);
+                    else clearHighlights();
+                    return;
+                }
+            }
+            clearHighlights();
+        }
+
+        @Override public void cancelEditing() { clearHighlights(); super.cancelEditing(); }
+        @Override public void stopEditing()   { clearHighlights(); super.stopEditing(); }
+
+        // ---- Helpers ----
         private static java.util.List<String> parseSpecs(String csv, int width) {
             java.util.List<String> out = new java.util.ArrayList<>(width);
-            if (csv == null || csv.trim().isEmpty()) {
-                for (int i = 0; i < width; i++) out.add("x");
-                return out;
-            }
+            if (csv == null || csv.trim().isEmpty()) { for (int i=0;i<width;i++) out.add("x"); return out; }
             String[] toks = csv.split(",");
             for (String t : toks) out.add(t.trim());
             if (out.size() < width) while (out.size() < width) out.add("x");
@@ -273,9 +348,7 @@ public class PokeTool extends Tool {
         }
         private static String toBinStringMSBFirst(Value v) {
             if (v == null) return "(X)";
-            if (v.getWidth() <= 1) {
-                return (v == Value.TRUE) ? "1" : (v == Value.FALSE ? "0" : "X");
-            }
+            if (v.getWidth() <= 1) return (v == Value.TRUE) ? "1" : (v == Value.FALSE ? "0" : "X");
             StringBuilder sb = new StringBuilder(v.getWidth());
             for (int i = v.getWidth() - 1; i >= 0; i--) sb.append(bitChar(v.get(i)));
             return sb.toString();
@@ -286,6 +359,53 @@ public class PokeTool extends Tool {
             if ("1".equals(s)) return "Const 1";
             if (s.startsWith("N")) return "Net " + s.substring(1);
             return s;
+        }
+
+        private static String norm(String t) {
+            if (t == null) return "";
+            t = t.trim();
+            if (t.isEmpty()) return "";
+            if ("0".equals(t) || "1".equals(t)) return t;
+            if ("x".equalsIgnoreCase(t)) return "x";
+            if (t.length()>=2 && (t.charAt(0)=='N' || t.charAt(0)=='n')) {
+                try { int id = Integer.parseInt(t.substring(1).trim()); return "N"+id; } catch (NumberFormatException ignore) {}
+            }
+            return t;
+        }
+
+        private void highlightMatches(String token) {
+            matched.clear();
+            if (token == null || token.isBlank()) {
+                canvas.getProject().repaintCanvas();
+                return;
+            }
+
+            Circuit circ = canvas.getCircuit();
+            if (circ == null) return;
+
+            for (Component c : circ.getNonWires()) { // 👈 reemplazo de circ.getComponents()
+                if (!(c.getFactory() instanceof BitLabeledTunnel)) continue;
+                AttributeSet as = c.getAttributeSet();
+                String csv = null;
+                try { csv = as.getValue(BitLabeledTunnel.BIT_SPECS); } catch (Throwable ignore) {}
+                if (csv == null || csv.isBlank()) continue;
+
+                for (String t : csv.split(",")) {
+                    if (norm(t).equals(token)) {
+                        matched.add(c);
+                        break;
+                    }
+                }
+            }
+
+            canvas.getProject().repaintCanvas();
+        }
+
+        private void clearHighlights() {
+            if (!matched.isEmpty()) {
+                matched.clear();
+                canvas.getProject().repaintCanvas();
+            }
         }
     }
 
