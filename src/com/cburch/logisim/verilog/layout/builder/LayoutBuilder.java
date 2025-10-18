@@ -120,8 +120,8 @@ public final class LayoutBuilder {
         // --- Grafo raíz y opciones ELK ---
         ElkNode root = ElkGraphUtil.createGraph();
         root.setProperty(CoreOptions.ALGORITHM, "org.eclipse.elk.layered");
-        root.setProperty(LayeredOptions.SPACING_NODE_NODE, 70.0);
-        root.setProperty(CoreOptions.SPACING_COMPONENT_COMPONENT, 80.0);
+        root.setProperty(LayeredOptions.SPACING_NODE_NODE, 100.0);
+        root.setProperty(CoreOptions.SPACING_COMPONENT_COMPONENT, 100.0);
         root.setProperty(LayeredOptions.EDGE_ROUTING, EdgeRouting.POLYLINE);
         root.setProperty(CoreOptions.DIRECTION, Direction.RIGHT);
         root.setProperty(LayeredOptions.EDGE_LABELS_PLACEMENT, EdgeLabelPlacement.CENTER);

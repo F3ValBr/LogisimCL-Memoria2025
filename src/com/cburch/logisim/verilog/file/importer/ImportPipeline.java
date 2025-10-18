@@ -141,6 +141,14 @@ final class ImportPipeline {
 
                 batch.commit(proj, "addComponentsFromImportAction");
 
+                // === Reescritura de túneles → cables (con puentes) ===
+                try {
+                    BitLabeledTunnelRewriter.rewrite(proj, target, g);
+                } catch (Throwable t) {
+                    t.printStackTrace(); // para no abortar el import si algo sale mal
+                }
+
+
                 alias.clear();
                 cellHandles.clear();
                 topAnchors.clear();
@@ -209,6 +217,13 @@ final class ImportPipeline {
                 constants.place(batch, proj, mod, cellHandles, topAnchors, g, specs);
 
                 batch.commit(proj, "materializeModuleAction");
+
+                // === Reescritura de túneles → cables ===
+                try {
+                    BitLabeledTunnelRewriter.rewrite(proj, target, g);
+                } catch (Throwable t) {
+                    t.printStackTrace(); // para no abortar el import si algo sale mal
+                }
 
                 alias.clear();
                 cellHandles.clear();

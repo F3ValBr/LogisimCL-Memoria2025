@@ -22,6 +22,7 @@ import com.cburch.logisim.std.wiring.BitLabeledTunnel;
 import com.cburch.logisim.util.Icons;
 
 import static com.cburch.logisim.data.Direction.*;
+import static com.cburch.logisim.std.wiring.BitLabeledTunnel.parseSpecs;
 
 public class PokeTool extends Tool {
 	private static final Icon toolIcon = Icons.getIcon("poke.gif");
@@ -166,7 +167,7 @@ public class PokeTool extends Tool {
                 String spec  = specs.get(i);             // crudo (0/1/x/N…)
                 String pSpec = prettySpec(spec);         // legible
                 String bitv  = bitChar(bus.get(i));
-                String tok   = norm(spec);               // normalizado para matching
+                String tok   = normalizeToken(spec);               // normalizado para matching
                 String line  = "  b" + i + ": " + pSpec + " -> " + bitv;
                 rows.add(new Row(line, true, tok, i));
             }
@@ -326,15 +327,6 @@ public class PokeTool extends Tool {
         @Override public void stopEditing()   { clearHighlights(); super.stopEditing(); }
 
         // ---- Helpers ----
-        private static java.util.List<String> parseSpecs(String csv, int width) {
-            java.util.List<String> out = new java.util.ArrayList<>(width);
-            if (csv == null || csv.trim().isEmpty()) { for (int i=0;i<width;i++) out.add("x"); return out; }
-            String[] toks = csv.split(",");
-            for (String t : toks) out.add(t.trim());
-            if (out.size() < width) while (out.size() < width) out.add("x");
-            else if (out.size() > width) out = out.subList(0, width);
-            return out;
-        }
         private static String bitChar(Value v) {
             if (v == null) return "X";
             if (v == Value.ERROR) return "E";
@@ -361,14 +353,14 @@ public class PokeTool extends Tool {
             return s;
         }
 
-        private static String norm(String t) {
+        private static String normalizeToken(String t) {
             if (t == null) return "";
             t = t.trim();
             if (t.isEmpty()) return "";
             if ("0".equals(t) || "1".equals(t)) return t;
             if ("x".equalsIgnoreCase(t)) return "x";
             if (t.length()>=2 && (t.charAt(0)=='N' || t.charAt(0)=='n')) {
-                try { int id = Integer.parseInt(t.substring(1).trim()); return "N"+id; } catch (NumberFormatException ignore) {}
+                try { int id = Integer.parseInt(t.substring(1).trim()); return "N"+id; } catch (NumberFormatException ignore) { }
             }
             return t;
         }
@@ -391,7 +383,7 @@ public class PokeTool extends Tool {
                 if (csv == null || csv.isBlank()) continue;
 
                 for (String t : csv.split(",")) {
-                    if (norm(t).equals(token)) {
+                    if (normalizeToken(t).equals(token)) {
                         matched.add(c);
                         break;
                     }

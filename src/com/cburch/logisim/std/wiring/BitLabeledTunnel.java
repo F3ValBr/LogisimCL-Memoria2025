@@ -333,7 +333,7 @@ public class BitLabeledTunnel extends InstanceFactory {
 
     /* ==================== Helpers CSV/constantes ==================== */
 
-    private static List<String> parseSpecs(String csv, int width) {
+    public static List<String> parseSpecs(String csv, int width) {
         List<String> out = new ArrayList<>(width);
         if (csv == null || csv.trim().isEmpty()) {
             for (int i = 0; i < width; i++) out.add("x");

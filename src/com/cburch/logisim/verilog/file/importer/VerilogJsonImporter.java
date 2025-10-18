@@ -23,8 +23,10 @@ import com.cburch.logisim.verilog.std.ComponentAdapterRegistry;
 import com.cburch.logisim.verilog.std.adapters.ModuleBlackBoxAdapter;
 import com.cburch.logisim.verilog.std.adapters.wordlvl.*;
 
+import java.awt.*;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.List;
 
 import static com.cburch.logisim.verilog.file.ui.WarningCollector.showXWarningDialogLater;
 
