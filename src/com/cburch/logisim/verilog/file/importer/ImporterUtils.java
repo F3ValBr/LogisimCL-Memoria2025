@@ -77,13 +77,13 @@ public class ImporterUtils {
          * </ol>
          * If all attempts fail, the method does nothing.
          */
-        @SuppressWarnings({ "rawtypes", "unchecked" })
+        @SuppressWarnings({"rawtypes","unchecked"})
         static void setConstantValueFlexible(AttributeSet a, int width, int value) {
-            // 1) Mask adecuado al ancho
+            // 1) Máscara al ancho
             final int w = Math.max(1, width);
-            final int masked = (w >= 31) ? ((w >= 32) ? value : (value & ((1 << 31) - 1))) : (value & ((1 << w) - 1));
+            final int masked = (w >= 32) ? value : (value & ((1 << w) - 1));
 
-            // 2) Localiza el atributo "value"
+            // 2) Localiza el atributo de valor
             Attribute valueAttr = null;
             try { valueAttr = Constant.ATTR_VALUE; } catch (Throwable ignore) { }
 
@@ -97,40 +97,41 @@ public class ImporterUtils {
                     }
                 }
             }
-            if (valueAttr == null) {
-                // No hay atributo "value": nada que hacer
-                return;
-            }
+            if (valueAttr == null) return; // no hay atributo de valor
 
-            // 3) Intento A: asignar como Integer
-            try {
-                a.setValue((Attribute<Object>) valueAttr, masked);
-                return;
-            } catch (ClassCastException ignore) {
-                // El atributo no acepta Integer; sigue
-            } catch (Throwable ignore) {
-                // Algún otro fallo; sigue
-            }
+            // Helper local para setear evitando problemas de genéricos
+            Attribute finalValueAttr = valueAttr;
+            java.util.function.Consumer<Object> set = (obj) -> a.setValue(finalValueAttr, obj);
 
-            // 4) Intento B: asignar como Value (si el build lo usa)
+            // 3) Si el atributo actualmente contiene un Integer, usa Integer
             try {
-                // Evita class-not-found si el tipo no existe en tu build
-                Value val =
-                        Value.createKnown(BitWidth.create(w), masked);
-                a.setValue((Attribute<Object>) valueAttr, val);
-                return;
-            } catch (Throwable ignore) {
-                // No existe Value en este build o no coincide el tipo; sigue
-            }
+                Object cur = a.getValue(valueAttr);
+                if (cur instanceof Integer || cur == null) {
+                    set.accept(masked);
+                    return;
+                }
+            } catch (Throwable ignore) { /* sigue */ }
 
-            // 5) Intento C: usar parse(String) del propio atributo (respeta el tipo concreto)
+            // 4) Intento A: Integer (aunque cur fuese de otro tipo, puede que igual lo acepte)
             try {
-                Attribute<Object> at = (Attribute<Object>) valueAttr;
+                set.accept(masked);
+                return;
+            } catch (Throwable ignore) { /* sigue */ }
+
+            // 5) Intento B: usar el parse(String) del atributo (respeta el tipo concreto del build)
+            try {
                 String hex = "0x" + Integer.toHexString(masked);
-                Object parsed = at.parse(hex);
-                a.setValue(at, parsed);
+                Object parsed = valueAttr.parse(hex);
+                set.accept(parsed);
+                return;
+            } catch (Throwable ignore) { /* sigue */ }
+
+            // 6) Intento C: Value (solo si lo acepta este build)
+            try {
+                Value val = Value.createKnown(BitWidth.create(w), masked);
+                set.accept(val);
             } catch (Throwable ignore) {
-                // Último recurso falló; no hacemos nada más
+                // Ya no hay más que podamos hacer. Silencioso a propósito.
             }
         }
     }
