@@ -31,6 +31,9 @@ public final class VerilogModuleBuilder {
         // Puertos del módulo (compacto: int[] netIds)
         YosysModuleDTO.readModulePorts(dto.moduleNode().path("ports"), mod);
 
+        // Netnames (nombre → {bits, hide_name})
+        YosysModuleDTO.readNetnames(dto.moduleNode().path("netnames"), mod);
+
         // Celdas (vía factories)
         dto.cells().forEach(c -> {
             VerilogCell cell = registry.createCell(

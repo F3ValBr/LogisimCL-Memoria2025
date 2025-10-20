@@ -11,6 +11,7 @@ import com.cburch.logisim.file.LogisimFileActions;
 import com.cburch.logisim.proj.Project;
 import com.cburch.logisim.std.wiring.Constant;
 import com.cburch.logisim.verilog.comp.auxiliary.LogicalMemory;
+import com.cburch.logisim.verilog.comp.auxiliary.NetnameEntry;
 import com.cburch.logisim.verilog.comp.impl.VerilogCell;
 import com.cburch.logisim.verilog.comp.impl.VerilogModuleImpl;
 import com.cburch.logisim.verilog.file.ui.NameConflictUI;
@@ -19,10 +20,11 @@ import com.cburch.logisim.verilog.layout.builder.LayoutBuilder;
 import org.eclipse.elk.graph.ElkNode;
 import com.cburch.logisim.verilog.std.Strings;
 
+
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.List;
 
 public class ImporterUtils {
 
@@ -258,6 +260,232 @@ public class ImporterUtils {
                 for (Integer i : lm.initIdxs())      { var c = mod.cells().get(i); if (c!=rep) alias.put(c, rep); }
             }
             return alias;
+        }
+    }
+
+    static final class NetnameUtils {
+        static Optional<String> resolveNetname(VerilogModuleImpl mod, List<String> bitSpecs) {
+            if (bitSpecs == null || bitSpecs.isEmpty()) return Optional.empty();
+
+            final int n = bitSpecs.size();
+            final Integer[] ids = new Integer[n];
+            final String[] raw = new String[n];
+            boolean hasAnyNet = false;
+            boolean hasAnyConst = false;
+
+            // 1) Parseo estricto (0/1/x o N<num>=0). Tokens libres -> aborta
+            for (int i = 0; i < n; i++) {
+                String s = bitSpecs.get(i);
+                if (s == null) return Optional.empty();
+                s = s.trim();
+                raw[i] = s;
+
+                if ("0".equals(s) || "1".equals(s) || "x".equalsIgnoreCase(s)) {
+                    ids[i] = null;
+                    hasAnyConst = true;
+                    continue;
+                }
+                if (s.length() >= 2 && (s.charAt(0) == 'N' || s.charAt(0) == 'n')) {
+                    try {
+                        int id = Integer.parseInt(s.substring(1).trim());
+                        if (id < 0) { // no aceptamos nets negativas
+                            ids[i] = null;
+                            hasAnyConst = true;
+                        } else {
+                            ids[i] = id;
+                            hasAnyNet = true;
+                        }
+                        continue;
+                    } catch (NumberFormatException ignore) {
+                        return Optional.empty();
+                    }
+                }
+                // Token libre (nombre textual de net) => no intentamos renombrar
+                return Optional.empty();
+            }
+            if (!hasAnyNet) return Optional.empty();
+
+            // 2) Caso rápido: match exacto (sin constantes)
+            if (!hasAnyConst) {
+                int[] flat = Arrays.stream(ids).mapToInt(Integer::intValue).toArray();
+                String exact = findExactNetname(mod, flat);
+                if (exact != null) return Optional.of(exact);
+            }
+
+            // 3) Candidatos: para cada netname que contenga TODOS los ids en el MISMO orden (subsecuencia)
+            List<Integer> seq = new ArrayList<>();
+            for (Integer v : ids) if (v != null) seq.add(v);
+
+            String best = null;
+            for (NetnameEntry nn : mod.netnames()) {
+                if (nn.hideName()) continue;
+                int[] nb = nn.bits();
+                if (nb == null || nb.length == 0) continue;
+
+                // subsecuencia en orden
+                if (!isSubsequenceInOrder(nb, seq)) continue;
+
+                // 3.a) Si es subsecuencia, construye piezas
+                List<String> pieces = new ArrayList<>();
+                int i = 0;
+                while (i < n) {
+                    // bloque de constantes
+                    if (ids[i] == null) {
+                        pieces.add(raw[i].toLowerCase());
+                        i++;
+                        continue;
+                    }
+                    // bloque de nets (intenta agrupar los que caen en este netname en runs por valor consecutivo)
+                    int j = i;
+                    List<Integer> bucket = new ArrayList<>();
+                    while (j < n && ids[j] != null) {
+                        bucket.add(ids[j]);
+                        j++;
+                    }
+                    // bucket = N{ids} consecutivos en el CSV
+                    pieces.addAll(splitBucketByPresenceAndCompact(nn, bucket));
+                    i = j;
+                }
+
+                // 3.b) Compacta runs de constantes para legibilidad
+                pieces = mergeConstantRuns(pieces, /*hideSingles=*/false);
+
+                String candidate = String.join(";", pieces);
+                // Preferimos la etiqueta más corta
+                if (best == null || candidate.length() < best.length()) best = candidate;
+            }
+
+            if (best != null && !best.isBlank()) return Optional.of(best);
+
+            // 4) Fallback: sin netname aplicable
+            String pretty = SpecBuilder.makePrettyLabel(bitSpecs);
+            if (pretty != null && !pretty.isBlank()) return Optional.of(pretty);
+
+            return Optional.empty();
+        }
+
+        /* === Helpers ================================================================= */
+
+        private static boolean isSubsequenceInOrder(int[] universe, List<Integer> seq) {
+            if (seq.isEmpty()) return false;
+            int p = 0;
+            for (int v : seq) {
+                p = indexOf(universe, v, p);
+                if (p < 0) return false;
+                p++;
+            }
+            return true;
+        }
+
+        private static int indexOf(int[] arr, int v, int from) {
+            for (int k = Math.max(0, from); k < arr.length; k++)
+                if (arr[k] == v) return k;
+            return -1;
+        }
+
+        /**
+         * Divide un bucket (lista contigua del CSV) en piezas:
+         * - subruns que están dentro del netname 'nn' -> "nn.name():a-b" (compactado por valor)
+         * - subruns que NO están dentro de 'nn' -> "Nstart-Nend"
+         */
+        private static List<String> splitBucketByPresenceAndCompact(NetnameEntry nn, List<Integer> bucket) {
+            List<String> out = new ArrayList<>();
+            if (bucket.isEmpty()) return out;
+            int[] nb = nn.bits();
+            // set para pertenencia O(1)
+            java.util.BitSet in = new java.util.BitSet();
+            int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
+            for (int id : nb) {
+                in.set(id);
+                if (id < min) min = id;
+                if (id > max) max = id;
+            }
+
+            int i = 0;
+            while (i < bucket.size()) {
+                int id0 = bucket.get(i);
+                boolean inside = (id0 >= min && id0 <= max && in.get(id0));
+
+                // avanza tramo manteniendo "inside" y adyacencia por valor (prev+1)
+                int j = i, prev = id0;
+                while (j + 1 < bucket.size()) {
+                    int nxt = bucket.get(j + 1);
+                    boolean inNext = (nxt >= min && nxt <= max && in.get(nxt));
+                    if (inNext != inside) break;
+                    if (nxt != prev + 1) break; // solo compactamos adyacentes por valor
+                    prev = nxt;
+                    j++;
+                }
+
+                if (inside) {
+                    // tramo perteneciente al netname
+                    if (id0 == prev) out.add(nn.name() + ":" + id0);
+                    else out.add(nn.name() + ":" + id0 + "-" + prev);
+                } else {
+                    // tramo fuera -> Nstart[-end]
+                    if (id0 == prev) out.add("N" + id0);
+                    else out.add("N" + id0 + "-" + prev);
+                }
+                i = j + 1;
+            }
+            return out;
+        }
+
+        /**
+         * Match exacto: mismo largo y mismos IDs en el mismo orden.
+         */
+        static String findExactNetname(VerilogModuleImpl mod, int[] ids) {
+            if (ids == null || ids.length == 0) return null;
+            for (NetnameEntry nn : mod.netnames()) {
+                if (nn.hideName()) continue;
+                int[] nb = nn.bits();
+                if (nb == null || nb.length != ids.length) continue;
+                boolean eq = true;
+                for (int i = 0; i < nb.length; i++) {
+                    if (nb[i] != ids[i]) {
+                        eq = false;
+                        break;
+                    }
+                }
+                if (eq) return nn.name();
+            }
+            return null;
+        }
+
+        /**
+         * Compacta runs consecutivos de constantes iguales ("0","1","x") en piezas del tipo:
+         * - una sola => "0"
+         * - k seguidas => "k'b0" / "k'b1" / "k'bx"
+         * No toca piezas con ":" (name:...) ni las "N..." ya compactadas.
+         */
+        private static List<String> mergeConstantRuns(List<String> pieces, boolean hideSingles) {
+            if (pieces == null || pieces.isEmpty()) return pieces;
+
+            List<String> out = new ArrayList<>(pieces.size());
+            int i = 0;
+            while (i < pieces.size()) {
+                String p = pieces.get(i);
+                if (isConst(p)) {
+                    String tok = p.toLowerCase();
+                    int j = i + 1;
+                    while (j < pieces.size() && tok.equalsIgnoreCase(pieces.get(j))) j++;
+                    int count = j - i;
+                    if (!(hideSingles && count == 1)) {
+                        out.add(count + "'b" + tok);
+                    }
+                    i = j;
+                } else {
+                    out.add(p);
+                    i++;
+                }
+            }
+            return out;
+        }
+
+        private static boolean isConst(String s) {
+            if (s == null) return false;
+            String t = s.trim().toLowerCase();
+            return "0".equals(t) || "1".equals(t) || "x".equals(t);
         }
     }
 

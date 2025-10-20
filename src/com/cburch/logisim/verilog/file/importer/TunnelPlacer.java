@@ -16,6 +16,8 @@ import com.cburch.logisim.verilog.std.adapters.wordlvl.*;
 import java.awt.Graphics;
 import java.util.*;
 
+import static com.cburch.logisim.verilog.file.importer.ImporterUtils.NetnameUtils.resolveNetname;
+
 final class TunnelPlacer {
     private final int grid;
 
@@ -55,6 +57,8 @@ final class TunnelPlacer {
             boolean attrOutput = (p.direction() == PortDirection.OUTPUT);
             Direction facing = (anc.facing() == Direction.EAST) ? Direction.WEST : Direction.EAST;
             String pretty = SpecBuilder.makePrettyLabel(bitSpecs);
+            String label  = resolveNetname(mod, bitSpecs)
+                    .orElse(pretty);
 
             Location kLoc = ImporterUtils.Geom.stepFrom(anc.loc(), facing, -grid);
             K key = new K(kLoc.getX(), kLoc.getY(), pretty, attrOutput);
@@ -62,7 +66,7 @@ final class TunnelPlacer {
 
             int w = Math.max(1, p.width());
             if (w <= 32) {
-                createBitLabeledTunnel(batch, anc.loc(), w, bitSpecs, pretty, facing, attrOutput);
+                createBitLabeledTunnel(batch, anc.loc(), w, bitSpecs, label, facing, attrOutput);
             } else {
                 placeOverflowTunnels(batch, anc.loc(), w, bitSpecs, facing, attrOutput);
             }
@@ -92,6 +96,8 @@ final class TunnelPlacer {
 
                 List<String> bitSpecs = specs.buildBitSpecsForCellPort(mod.name(), cell, port);
                 String pretty = SpecBuilder.makePrettyLabel(bitSpecs);
+                String label  = resolveNetname(mod, bitSpecs)
+                        .orElse(pretty);
 
                 Direction facing = LayoutServices.facingByNearestBorder(ih.component.getBounds(g), pin);
                 boolean attrOutput = (SpecBuilder.dirForPort(cell, port) == SpecBuilder.Dir.IN);
@@ -101,7 +107,7 @@ final class TunnelPlacer {
                 if (!placed.add(key)) continue;
 
                 if (w <= 32) {
-                    createBitLabeledTunnel(batch, pin, w, bitSpecs, pretty, facing, attrOutput);
+                    createBitLabeledTunnel(batch, pin, w, bitSpecs, label, facing, attrOutput);
                 } else {
                     placeOverflowTunnels(batch, pin, w, bitSpecs, facing, attrOutput);
                 }
