@@ -155,7 +155,7 @@ final class SpecBuilder {
             }
         }
 
-        if (hasX) return "x";          // mezcla con nets o solo X ⇒ "x"
+        if (hasX) return "X_UNDEF";          // mezcla con nets o solo X ⇒ "x"
         if (ordered.isEmpty()) return ""; // solo constantes 0/1 (o vacío) ⇒ sin etiqueta
 
         List<int[]> ranges = contiguousRanges(ordered);
