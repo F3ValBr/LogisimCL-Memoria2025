@@ -9,6 +9,7 @@ import com.cburch.logisim.data.*;
 import com.cburch.logisim.instance.StdAttr;
 import com.cburch.logisim.proj.Project;
 import com.cburch.logisim.std.wiring.BitLabeledTunnel;
+import com.cburch.logisim.std.wiring.Tunnel;
 import com.cburch.logisim.verilog.file.importer.routing.GridRouter;
 import com.cburch.logisim.verilog.file.importer.routing.MstPlanner;
 import com.cburch.logisim.verilog.file.importer.routing.RouterUtils;
@@ -57,7 +58,7 @@ public final class BitLabeledTunnelRewriter {
         // 4) Intentar reescribir cada grupo de forma independiente
         for (Map.Entry<GroupKey, List<TunnelInfo>> entry : rewriteEntries) {
             try {
-                replaceGroupWithGridRouter(proj, circ, g, entry.getValue());
+                replaceGroupWith(proj, circ, g, entry.getValue());
             } catch (Throwable t) {
                 // No abortar proceso completo por un grupo
                 t.printStackTrace();
@@ -72,10 +73,10 @@ public final class BitLabeledTunnelRewriter {
      * @param g Graphics context (for measuring components).
      * @param grp List of TunnelInfo in the same group.
      */
-    private static void replaceGroupWithGridRouter(Project proj,
-                                                   Circuit circ,
-                                                   Graphics g,
-                                                   List<TunnelInfo> grp) {
+    private static void replaceGroupWith(Project proj,
+                                         Circuit circ,
+                                         Graphics g,
+                                         List<TunnelInfo> grp) {
         if (grp == null || grp.size() < 2) return;
 
         // Evitar grupos gigantes que disparan combinatoria
@@ -90,10 +91,8 @@ public final class BitLabeledTunnelRewriter {
             Direction f = Direction.EAST;
             try {
                 AttributeSet as = ti.comp().getAttributeSet();
-                if (as != null) {
-                    Direction v = as.getValue(StdAttr.FACING);
-                    if (v != null) f = v;
-                }
+                Direction v = (as != null) ? as.getValue(StdAttr.FACING) : null;
+                if (v != null) f = v;
             } catch (Throwable ignore) { }
             facings.add(f);
         }
@@ -157,12 +156,65 @@ public final class BitLabeledTunnelRewriter {
             planned.add(Wire.create(tj, mj));
         }
 
-        if (!ok) return; // no aplicamos nada si falla una arista
+        if (ok) {
+            CircuitMutation mut = new CircuitMutation(circ);
+            for (Wire w : planned) mut.add(w);
+            for (TunnelInfo ti : grp) mut.remove(ti.comp());
+            proj.doAction(mut.toAction(Strings.getter("rewriteBitTunnelsAction")));
+        } else {
+            // Fallback: convertir BLTs del grupo a Tunnel "plain" cuando no se pudo rutear como wires
+            CircuitMutation mut = new CircuitMutation(circ);
 
-        CircuitMutation mut = new CircuitMutation(circ);
-        for (Wire w : planned) mut.add(w);
-        for (TunnelInfo ti : grp) mut.remove(ti.comp());
-        proj.doAction(mut.toAction(Strings.getter("rewriteBitTunnelsAction")));
+            for (TunnelInfo ti : grp) {
+                try {
+                    Component old = ti.comp();
+                    AttributeSet asOld = old.getAttributeSet();
+
+                    // WIDTH del BLT
+                    BitWidth bw = (asOld != null) ? asOld.getValue(StdAttr.WIDTH) : null;
+                    int width = Math.max(1, bw == null ? ti.tokensNorm().size() : bw.getWidth());
+
+                    // LABEL del BLT
+                    String label = (asOld != null) ? asOld.getValue(StdAttr.LABEL) : SpecBuilder.makePrettyLabel(ti.tokensNorm());
+
+                    // FACING del BLT
+                    Direction facing = Direction.EAST;
+                    try {
+                        Direction v = (asOld != null) ? asOld.getValue(StdAttr.FACING) : null;
+                        if (v != null) facing = v;
+                    } catch (Throwable ignore) { }
+
+                    Tunnel tunnelF = Tunnel.FACTORY;
+
+                    // Atributos del Tunnel
+                    AttributeSet a = tunnelF.createAttributeSet();
+                    try { a.setValue(StdAttr.WIDTH, BitWidth.create(width)); } catch (Throwable ignore) {}
+                    try { a.setValue(StdAttr.FACING, facing); } catch (Throwable ignore) {}
+                    if (label != null && !label.isBlank()) {
+                        try { a.setValue(StdAttr.LABEL, label); } catch (Throwable ignore) {}
+                    }
+
+                    // Colocar el Tunnel de forma que su pin coincida EXACTO con la boca del BLT
+                    Location mouth = ti.mouth();
+                    Component probe = tunnelF.createComponent(Location.create(0, 0), a);
+                    EndData end0 = probe.getEnd(0);
+                    int offX = end0.getLocation().getX() - probe.getLocation().getX();
+                    int offY = end0.getLocation().getY() - probe.getLocation().getY();
+                    Location place = Location.create(mouth.getX() - offX, mouth.getY() - offY);
+
+                    // Encolar: quitar BLT y añadir Tunnel
+                    mut.remove(old);
+                    mut.add(tunnelF.createComponent(place, a));
+                } catch (Throwable t) {
+                    // falla local: continuamos con el resto
+                    t.printStackTrace();
+                }
+            }
+
+            if (!mut.isEmpty()) {
+                proj.doAction(mut.toAction(Strings.getter("rewriteBitTunnelsToPlainTunnelsAction")));
+            }
+        }
     }
 
     // === Data model ============================================================

@@ -151,7 +151,7 @@ final class SpecBuilder {
                         ordered.add(Integer.parseInt(t.substring(1)));
                     } catch (Exception ignore) { /* ignora tokens mal formados */ }
                 }
-                // "0" o "1" no aportan a la etiqueta visible
+                // "0" o "1" no aportan a la etiqueta visible aqui
             }
         }
 
