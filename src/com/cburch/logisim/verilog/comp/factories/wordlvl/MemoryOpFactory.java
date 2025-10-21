@@ -28,14 +28,14 @@ public class MemoryOpFactory extends AbstractVerilogCellFactory implements Veril
 
     @Override
     public VerilogCell create(String name,
-                              String typeId,
+                              String type,
                               Map<String, String> parameters,
                               Map<String, Object> attributes,
                               Map<String, String> portDirections,
                               Map<String, List<Object>> connections) {
 
-        final MemoryOp op = MemoryOp.fromYosys(typeId);
-        final CellType ct = CellType.fromYosys(typeId);
+        final MemoryOp op = MemoryOp.fromYosys(type);
+        final CellType ct = CellType.fromYosys(type);
         final GenericCellAttribs attribs = new GenericCellAttribs(attributes);
 
         // 1) Specific params by type

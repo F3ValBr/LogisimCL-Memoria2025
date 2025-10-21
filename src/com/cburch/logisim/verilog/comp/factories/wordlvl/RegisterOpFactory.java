@@ -19,18 +19,18 @@ import java.util.*;
  */
 public class RegisterOpFactory extends AbstractVerilogCellFactory implements VerilogCellFactory {
     @Override
-    public VerilogCell create(String name, String typeId,
+    public VerilogCell create(String name, String type,
                               Map<String,String> parameters,
                               Map<String,Object> attributes,
                               Map<String,String> portDirections,
                               Map<String, List<Object>> connections) {
 
-        RegisterOp op = RegisterOp.fromYosys(typeId);
+        RegisterOp op = RegisterOp.fromYosys(type);
 
         RegisterOpParams params = getRegisterOpParams(op, parameters);
 
         var attribs = new RegisterAttribs(attributes);
-        VerilogCell cell = new WordLvlCellImpl(name, CellType.fromYosys(typeId), params, attribs);
+        VerilogCell cell = new WordLvlCellImpl(name, CellType.fromYosys(type), params, attribs);
 
         buildEndpoints(cell, portDirections, connections);
 
