@@ -23,6 +23,8 @@ public class YosysComponentsPortMapRegister implements PortMapRegister {
                 java.util.Map.of("A", 0, "B", 1, "Y", 2));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Exponent",
                 java.util.Map.of("A", 0, "Y", 1));
+        BuiltinPortMaps.registerByName(YCLib.getName(), "Dynamic Shifter",
+                java.util.Map.of("A", 0, "B", 1, "Y", 2));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Bitwise Multiplexer",
                 java.util.Map.of("A", 0, "B", 1, "S", 2, "Y", 3));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Binary Multiplexer",

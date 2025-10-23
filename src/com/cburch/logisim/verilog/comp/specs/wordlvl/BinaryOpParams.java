@@ -37,8 +37,6 @@ public final class BinaryOpParams extends GenericCellParams {
     private void validate() {
         if (op.isLogic()) {
             if (yWidth != 1) throw new IllegalArgumentException(op + ": Y_WIDTH debe ser 1");
-        } else if (op.isShift()) {
-            if (yWidth != aWidth) throw new IllegalArgumentException(op + ": Y_WIDTH debe == A_WIDTH");
         } else if (op.isBitwise()) {
             if (yWidth != Math.max(aWidth, bWidth))
                 throw new IllegalArgumentException(op + ": Y_WIDTH debe == max(A_WIDTH, B_WIDTH)");

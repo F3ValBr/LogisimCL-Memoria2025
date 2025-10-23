@@ -33,9 +33,9 @@ import static com.cburch.logisim.verilog.file.ui.WarningCollector.showXWarningDi
 public final class VerilogJsonImporter {
 
     // Variables comunes para el layout
-    static final int GRID  = 10;
-    static final int MIN_X = 100;
-    static final int MIN_Y = 100;
+    public static final int GRID  = 10;
+    public static final int MIN_X = 80;
+    public static final int MIN_Y = 80;
     static final int SEPARATION_INPUT_CELLS = 150;
     static final int PAD_X = SEPARATION_INPUT_CELLS + 100;
 

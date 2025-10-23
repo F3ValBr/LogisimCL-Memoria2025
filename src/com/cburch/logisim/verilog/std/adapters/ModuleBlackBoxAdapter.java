@@ -23,6 +23,8 @@ import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
 
+import static com.cburch.logisim.verilog.file.importer.VerilogJsonImporter.*;
+
 public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
 
     private final ModuleMaterializer materializer;
@@ -121,13 +123,11 @@ public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
         List<String> outNames = new ArrayList<>(names.subList(nIn, n));
 
         // Layout básico
-        final int GRID = 10;
-        final int minX = 100, minY = 100;
         final int spanY = Math.max(100, (n + 1) * GRID);
-        final int leftX = minX - 60, rightX = minX + 240;
+        final int leftX = MIN_X + 40, rightX = MIN_X + 240;
         final int inStep  = Math.max(GRID, spanY / Math.max(1, inNames.size()  + 1));
         final int outStep = Math.max(GRID, spanY / Math.max(1, outNames.size() + 1));
-        int curInY = minY + inStep, curOutY = minY + outStep;
+        int curInY = MIN_Y + inStep, curOutY = MIN_Y + outStep;
 
         CircuitMutation mu = new CircuitMutation(newCirc);
         List<String> order = new ArrayList<>();
@@ -135,7 +135,7 @@ public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
         // Inputs (izquierda)
         for (String pname : inNames) {
             int w = Math.max(1, safePortWidth(cell, pname));
-            addPinToMutation(mu, Location.create(leftX, curInY), false, false, w, pname, Direction.EAST);
+            addPinToMutation(mu, Location.create(leftX, curInY), false, false, w, pname, Direction.EAST, Direction.EAST);
             order.add(pname);
             curInY += inStep;
         }
@@ -143,7 +143,7 @@ public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
         // Outputs (derecha)
         for (String pname : outNames) {
             int w = Math.max(1, safePortWidth(cell, pname));
-            addPinToMutation(mu, Location.create(rightX, curOutY), true, false, w, pname, Direction.WEST);
+            addPinToMutation(mu, Location.create(rightX, curOutY), true, false, w, pname, Direction.WEST, Direction.WEST);
             order.add(pname);
             curOutY += outStep;
         }
@@ -159,13 +159,15 @@ public final class ModuleBlackBoxAdapter extends AbstractComponentAdapter {
                                          boolean triState,
                                          int width,
                                          String label,
-                                         Direction facing) {
+                                         Direction facing,
+                                         Direction labelLoc) {
         AttributeSet a = Pin.FACTORY.createAttributeSet();
         a.setValue(Pin.ATTR_TYPE, isOutput);
         a.setValue(Pin.ATTR_TRISTATE, triState);
         a.setValue(StdAttr.WIDTH, BitWidth.create(width));
         a.setValue(StdAttr.FACING, facing);
         a.setValue(StdAttr.LABEL, label);
+        a.setValue(Pin.ATTR_LABEL_LOC, labelLoc);
         mutation.add(Pin.FACTORY.createComponent(loc, a));
     }
 

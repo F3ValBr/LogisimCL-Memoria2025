@@ -37,11 +37,7 @@ public final class BinaryOpAdapter extends AbstractComponentAdapter
     private final MacroRegistry registry = MacroRegistry.bootBinaryDefaults();
 
     // Pareja (Library, ComponentFactory) para poder resolver port maps por librería
-    private static final class LibFactory {
-        final Library lib;
-        final ComponentFactory factory;
-        LibFactory(Library lib, ComponentFactory factory) { this.lib = lib; this.factory = factory; }
-    }
+    private record LibFactory(Library lib, ComponentFactory factory) { }
 
     @Override
     public boolean accepts(CellType t) {
@@ -86,15 +82,16 @@ public final class BinaryOpAdapter extends AbstractComponentAdapter
         try {
             AttributeSet attrs = lf.factory.createAttributeSet();
 
-            // Ancho de bus
+            // Ancho de bus / Etiqueta
             try { attrs.setValue(StdAttr.WIDTH, BitWidth.create(width)); } catch (Exception ignore) { }
-            // Etiqueta
             try { attrs.setValue(StdAttr.LABEL, cleanCellName(cell.name())); } catch (Exception ignore) { }
 
             // Signo (si el componente tiene el atributo correspondiente)
             applySignedModeIfAvailable(attrs, op, aSigned, bSigned);
 
-            // Nota: Para $add/$sub, el cableado de Cin/Cout lo resuelves en tu fase de wiring/túneles.
+            if (op.category() == BinaryOp.Category.SHIFT) {
+                configureShifterAttributes(attrs, op, cell);
+            }
 
             Component comp = addComponent(proj, circ, g, lf.factory, where, attrs);
 
@@ -215,11 +212,24 @@ public final class BinaryOpAdapter extends AbstractComponentAdapter
                 return (f == null) ? null : new LibFactory(arith, f);
             }
             case SHIFT -> {
-                // Shifts → usar Shifter (con pin out)
-                Library arith = lf.getLibrary("Arithmetic");
-                if (arith == null) return null;
-                ComponentFactory f = FactoryLookup.findFactory(arith, "Shifter");
-                return (f == null) ? null : new LibFactory(arith, f);
+                ComponentFactory f = null;
+                Library lib;
+
+                switch (op) {
+                    case SHIFT, SHIFTX -> {
+                        lib = lf.getLibrary("Yosys Components");
+                        if (lib != null)
+                            f = FactoryLookup.findFactory(lib, "Dynamic Shifter");
+                    }
+                    default -> {
+                        lib = lf.getLibrary("Arithmetic");
+                        if (lib != null)
+                            f = FactoryLookup.findFactory(lib, "Shifter");
+                    }
+                }
+
+                if (lib == null || f == null) return null;
+                return new LibFactory(lib, f);
             }
             default -> {
                 // Otros binarios (mashups raros) → no mapeados aquí
@@ -247,5 +257,50 @@ public final class BinaryOpAdapter extends AbstractComponentAdapter
             return Math.max(1, Math.max(Math.max(a, b), y));
         }
         return 1;
+    }
+
+    /** Configura el shifter (Dynamic o clásico) según el op y los params del cell. */
+    private void configureShifterAttributes(AttributeSet attrs, BinaryOp op, VerilogCell cell) {
+        // === 1) Leer params de Yosys (A/B/Y width, signed) ===
+        int aW = 8, bW = 3, yW = 8;
+        boolean aSigned = false, bSigned = false;
+
+        CellParams p = cell.params();
+        if (p instanceof BinaryOpParams bp) {
+            aW = Math.max(1, bp.aWidth());
+            bW = Math.max(1, bp.bWidth());
+            yW = Math.max(1, bp.yWidth());
+            aSigned = bp.aSigned();
+            bSigned = bp.bSigned();
+        } else if (p instanceof GenericCellParams g) {
+            aW = Math.max(1, parseIntRelaxed(g.asMap().get("A_WIDTH"), 8));
+            bW = Math.max(1, parseIntRelaxed(g.asMap().get("B_WIDTH"), 3));
+            yW = Math.max(1, parseIntRelaxed(g.asMap().get("Y_WIDTH"), aW));
+            aSigned = parseBoolRelaxed(g.asMap().get("A_SIGNED"), false);
+            bSigned = parseBoolRelaxed(g.asMap().get("B_SIGNED"), false);
+        }
+
+        // === 2) Intentar configurar como Dynamic Shifter (si los atributos existen) ===
+        boolean isDynamic =
+                setOptionByName(attrs, "mode", (op == BinaryOp.SHIFTX) ? "shiftx" : "shift")
+                        |  setBitWidthByName(attrs, "aWidth", aW)
+                        |  setBitWidthByName(attrs, "bWidth", bW)
+                        |  setBitWidthByName(attrs, "yWidth", yW)
+                        |  setBooleanByName(attrs, "aSigned", aSigned)
+                        |  setBooleanByName(attrs, "bSigned", bSigned);
+
+        if (isDynamic) {
+            // Ya quedó configurado en modo Dynamic Shifter. Listo.
+            return;
+        }
+
+        // === 3) Determinar el modo preferido para el shift clasico ===
+        String shiftId = switch (op) {
+            case SHL, SSHL -> "ll"; // logical left
+            case SHR       -> "lr"; // logical right
+            case SSHR      -> "ar"; // arithmetic right
+            default        -> "lr";
+        };
+        setOptionByName(attrs, "shift", shiftId);
     }
 }

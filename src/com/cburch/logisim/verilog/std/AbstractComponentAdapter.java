@@ -5,10 +5,7 @@ import com.cburch.logisim.circuit.CircuitException;
 import com.cburch.logisim.circuit.CircuitMutation;
 import com.cburch.logisim.comp.Component;
 import com.cburch.logisim.comp.ComponentFactory;
-import com.cburch.logisim.data.Attribute;
-import com.cburch.logisim.data.AttributeSet;
-import com.cburch.logisim.data.Bounds;
-import com.cburch.logisim.data.Location;
+import com.cburch.logisim.data.*;
 import com.cburch.logisim.proj.Project;
 import com.cburch.logisim.verilog.comp.auxiliary.CellType;
 
@@ -111,6 +108,41 @@ public abstract class AbstractComponentAdapter implements ComponentAdapter {
     public static boolean setHexByName(AttributeSet attrs, String name, int value) {
         return setParsedByName(attrs, name, "0x" + Integer.toHexString(value));
     }
+
+    @SuppressWarnings("unchecked")
+    public static boolean setBitWidthByName(AttributeSet attrs, String name, int width) {
+        if (attrs == null || name == null) return false;
+        if (width < 1) width = 1;
+
+        try {
+            BitWidth bw = BitWidth.create(width);
+
+            for (Attribute<?> a : attrs.getAttributes()) {
+                if (name.equalsIgnoreCase(a.getName())) {
+                    Object val = attrs.getValue(a);
+                    // verificamos por tipo en tiempo de ejecución
+                    if (val instanceof BitWidth || a.toString().toLowerCase().contains("bitwidth")) {
+                        attrs.setValue((Attribute<BitWidth>) a, bw);
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable t) { /* ignore */ }
+        return false;
+    }
+
+
+    public static boolean parseBoolRelaxed(Object v, boolean dflt) {
+        if (v == null) return dflt;
+        if (v instanceof Boolean b) return b;
+        String s = String.valueOf(v).trim().toLowerCase();
+        return switch (s) {
+            case "1","true","yes","y","t" -> true;
+            case "0","false","no","n","f" -> false;
+            default -> dflt;
+        };
+    }
+
 
     /** Si el token es null/blank, no hace nada (azúcar sintáctico útil). */
     public static boolean setParsedIfPresent(AttributeSet attrs, String name, String token) {
