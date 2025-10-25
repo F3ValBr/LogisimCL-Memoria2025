@@ -84,6 +84,10 @@ public final class GateOpAdapter extends AbstractComponentAdapter
                 } // éxito
             }
 
+            if (op == GateOp.ANDNOT || op == GateOp.ORNOT) {
+                setBooleanByName(attrs, "negate1", true);
+            }
+
             Component comp = addComponent(proj, circ, g, lf.factory, where, attrs);
 
             Map<String, Integer> nameToIdx = BuiltinPortMaps.forFactory(lf.lib, lf.factory, comp);
