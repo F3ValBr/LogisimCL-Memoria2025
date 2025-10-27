@@ -15,9 +15,9 @@ import java.math.BigInteger;
 public class Exponent extends InstanceFactory {
     static final int PER_DELAY = 1;
 
-    private static final int IN0 = 0; // BASE
-    private static final int IN1 = 1; // EXP (unsigned)
-    private static final int OUT = 2; // RESULT
+    static final int IN0 = 0; // BASE
+    static final int IN1 = 1; // EXP (unsigned)
+    static final int OUT = 2; // RESULT
 
     // ===== Modo de signo =====
     public static final AttributeOption MODE_UNSIGNED

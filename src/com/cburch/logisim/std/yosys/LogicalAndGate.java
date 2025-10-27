@@ -11,9 +11,9 @@ public class LogicalAndGate extends InstanceFactory {
     private static final int DELAY = 3;
 
     // Puertos (índices estables)
-    private static final int A   = 0;
-    private static final int B   = 1;
-    private static final int OUT = 2;
+    static final int A   = 0;
+    static final int B   = 1;
+    static final int OUT = 2;
 
     public LogicalAndGate() {
         super("Logical AND Gate", Strings.getter("logicAndGateComponent"));

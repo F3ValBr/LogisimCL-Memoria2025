@@ -19,8 +19,8 @@ public class PlexersPortMapRegister implements PortMapRegister {
 
         BuiltinPortMaps.registerResolverByName(plexersLib.getName(), "Multiplexer",
                 PlexersPortMapRegister::resolveMultiplexerPorts);
-        BuiltinPortMaps.registerByName(plexersLib.getName(), "Demultiplexer",
-                java.util.Map.of("A", 0, "S", 1, "Y", 2));
+        BuiltinPortMaps.registerResolverByName(plexersLib.getName(), "Demultiplexer",
+                PlexersPortMapRegister::resolveDemultiplexerPorts);
     }
 
     private static Map<String,Integer> resolveMultiplexerPorts(Component component) {
@@ -53,6 +53,62 @@ public class PlexersPortMapRegister implements PortMapRegister {
         m.putIfAbsent("A", 0);
         if (inputs > 1) m.putIfAbsent("B", 1);
 
+        return m;
+    }
+
+    private static Map<String,Integer> resolveDemultiplexerPorts(Component comp) {
+        AttributeSet attrs = comp.getAttributeSet();
+
+        // Nº de salidas = 2^(#select bits)
+        BitWidth selW = attrs.getValue(Plexers.ATTR_SELECT);
+        int outputs = 1 << selW.getWidth();
+
+        boolean enable = Boolean.TRUE.equals(attrs.getValue(Plexers.ATTR_ENABLE));
+
+        // Índices según updatePorts(...) del Demultiplexer:
+        // [0..outputs-1] = salidas
+        int IDX_SEL = outputs;                 // select
+        LinkedHashMap<String, Integer> m = getStringIntegerLinkedHashMap(enable, outputs, IDX_SEL);
+
+        // Alias de compatibilidad (si algún netlist dice solo "Y", lo
+        // apuntamos a Y0 para no reventar; mejor que fallar).
+        m.putIfAbsent("Y", 0);
+        m.putIfAbsent("y", 0);
+
+        return m;
+    }
+
+    private static LinkedHashMap<String, Integer> getStringIntegerLinkedHashMap(boolean enable, int outputs, int IDX_SEL) {
+        Integer IDX_EN = enable ? outputs +1 : null; // enable si existe
+        int IDX_A   = outputs + (enable ? 2 : 1);   // entrada de datos (último)
+
+        LinkedHashMap<String,Integer> m = new LinkedHashMap<>();
+
+        // Entrada de datos
+        m.put("A", IDX_A);
+        m.put("a", IDX_A);
+        m.put("in", IDX_A);
+        m.put("dataIn", IDX_A);
+
+        // Select
+        m.put("S", IDX_SEL);
+        m.put("s", IDX_SEL);
+        m.put("SEL", IDX_SEL);
+        m.put("select", IDX_SEL);
+
+        // Enable (si existe)
+        if (IDX_EN != null) {
+            m.put("EN", IDX_EN); m.put("en", IDX_EN);
+            m.put("ENABLE", IDX_EN); m.put("enable", IDX_EN);
+        }
+
+        // Salidas: Y0..Y{N-1} (y alias con corchetes)
+        for (int i = 0; i < outputs; i++) {
+            m.put("Y" + i, i);
+            m.put("y" + i, i);
+            m.put("Y[" + i + "]", i);
+            m.put("y[" + i + "]", i);
+        }
         return m;
     }
 

@@ -29,11 +29,11 @@ public class Comparator extends InstanceFactory {
     private static final Attribute<Boolean> ATTR_STRICT_EQ =
             Attributes.forBoolean("strictEq", Strings.getter("comparatorStrictEq"));
 
-    private static final int IN0   = 0;
-    private static final int IN1   = 1;
-    private static final int GT    = 2;
-    private static final int EQ    = 3;
-    private static final int LT    = 4;
+    static final int IN0   = 0;
+    static final int IN1   = 1;
+    static final int GT    = 2;
+    static final int EQ    = 3;
+    static final int LT    = 4;
 
     public Comparator() {
         super("Comparator", Strings.getter("comparatorComponent"));

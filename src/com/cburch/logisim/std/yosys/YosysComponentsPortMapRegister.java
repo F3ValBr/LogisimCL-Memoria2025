@@ -16,19 +16,19 @@ public class YosysComponentsPortMapRegister implements PortMapRegister {
         if (YCLib == null) return;
 
         BuiltinPortMaps.registerByName(YCLib.getName(), "Logical NOT Gate",
-                java.util.Map.of("A", 0, "Y", 1));
+                Map.of("A", LogicalNotGate.A, "Y", LogicalNotGate.OUT));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Logical AND Gate",
-                java.util.Map.of("A", 0, "B", 1, "Y", 2));
+                Map.of("A", LogicalAndGate.A, "B", LogicalAndGate.B, "Y", LogicalAndGate.OUT));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Logical OR Gate",
-                java.util.Map.of("A", 0, "B", 1, "Y", 2));
+                Map.of("A", LogicalOrGate.A, "B", LogicalOrGate.B, "Y", LogicalOrGate.OUT));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Exponent",
-                java.util.Map.of("A", 0, "Y", 1));
+                Map.of("A", Exponent.IN0, "B", Exponent.IN1, "Y", Exponent.OUT));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Dynamic Shifter",
-                java.util.Map.of("A", 0, "B", 1, "Y", 2));
+                Map.of("A", DynamicShifter.IN_A, "B", DynamicShifter.IN_B, "Y", DynamicShifter.OUT_Y));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Bitwise Multiplexer",
-                java.util.Map.of("A", 0, "B", 1, "S", 2, "Y", 3));
+                Map.of("A", BitwiseMultiplexer.A, "B", BitwiseMultiplexer.B, "S", BitwiseMultiplexer.S, "Y", BitwiseMultiplexer.Y));
         BuiltinPortMaps.registerByName(YCLib.getName(), "Binary Multiplexer",
-                java.util.Map.of("A", 0, "AX", 1, "S", 2, "Y", 3));
+                Map.of("A", BinaryMultiplexer.A, "AX", BinaryMultiplexer.A_X, "S", BinaryMultiplexer.S, "Y", BinaryMultiplexer.Y));
         BuiltinPortMaps.registerResolverByName(
                 YCLib.getName(),
                 "Priority Multiplexer",

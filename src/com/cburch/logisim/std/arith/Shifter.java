@@ -38,9 +38,9 @@ public class Shifter extends InstanceFactory {
 				new AttributeOption[] { SHIFT_LOGICAL_LEFT, SHIFT_LOGICAL_RIGHT,
 					SHIFT_ARITHMETIC_RIGHT, SHIFT_ROLL_LEFT, SHIFT_ROLL_RIGHT });
 	
-	private static final int IN0   = 0;
-	private static final int IN1   = 1;
-	private static final int OUT   = 2;
+	static final int IN0   = 0;
+	static final int IN1   = 1;
+	static final int OUT   = 2;
 	
 	public Shifter() {
 		super("Shifter", Strings.getter("shifterComponent"));

@@ -67,7 +67,13 @@ public final class MacroRegistry {
         reg.register(BinaryOp.NE.yosysId(), (ctx, cell, where) -> {
             int aw = guessWidth(cell.params(), "A_WIDTH", 1);
             int bw = guessWidth(cell.params(), "B_WIDTH", 1);
-            return b.buildNeAsSubckt(ctx, cell, where, aw, bw);
+            return b.buildNeAsSubckt(ctx, cell, where, aw, bw, false);
+        });
+
+        reg.register(BinaryOp.NEX.yosysId(), (ctx, cell, where) -> {
+            int aw = guessWidth(cell.params(), "A_WIDTH", 1);
+            int bw = guessWidth(cell.params(), "B_WIDTH", 1);
+            return b.buildNeAsSubckt(ctx, cell, where, aw, bw, true);
         });
 
         reg.register(BinaryOp.LE.yosysId(), (ctx, cell, where) -> {

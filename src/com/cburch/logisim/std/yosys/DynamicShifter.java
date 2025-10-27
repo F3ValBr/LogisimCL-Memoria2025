@@ -38,9 +38,9 @@ public class DynamicShifter extends InstanceFactory {
             Attributes.forBitWidth("yWidth", Strings.getter("shifterYWidth"));
 
     // Puertos
-    private static final int IN_A = 0;
-    private static final int IN_B = 1;
-    private static final int OUT_Y = 2;
+    static final int IN_A = 0;
+    static final int IN_B = 1;
+    static final int OUT_Y = 2;
 
     /** Permite combinar varios KeyConfigurator sin importar el fork de Logisim. */
     static final class MultiKeyConfigurator implements KeyConfigurator {

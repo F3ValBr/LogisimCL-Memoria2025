@@ -14,12 +14,12 @@ import com.cburch.logisim.util.GraphicsUtil;
 public class Divider extends InstanceFactory {
 	static final int PER_DELAY = 1;
 
-    private static final int IN0   = 0; // dividend lower
-    private static final int IN1   = 1; // divisor
-    private static final int OUT   = 2; // quotient (low w bits)
-    private static final int UPPER = 3; // dividend upper
-    private static final int REM   = 4; // remainder (low w bits)
-    private static final int SIGN_SEL = 5; // sign select (only in pin mode)
+    static final int IN0   = 0; // dividend lower
+    static final int IN1   = 1; // divisor
+    static final int OUT   = 2; // quotient (low w bits)
+    static final int UPPER = 3; // dividend upper
+    static final int REM   = 4; // remainder (low w bits)
+    static final int SIGN_SEL = 5; // sign select (only in pin mode)
 
     // ===== Atributo de modo (Unsigned / Signed / Pin / Auto) =====
     public static final AttributeOption MODE_UNSIGNED

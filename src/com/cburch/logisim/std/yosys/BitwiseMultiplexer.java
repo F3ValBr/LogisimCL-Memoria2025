@@ -11,10 +11,10 @@ import java.awt.*;
 import static com.cburch.logisim.data.Direction.*;
 
 public class BitwiseMultiplexer extends InstanceFactory {
-    private static final int A  = 0;
-    private static final int B  = 1;
-    private static final int S  = 2;
-    private static final int Y  = 3;
+    static final int A  = 0;
+    static final int B  = 1;
+    static final int S  = 2;
+    static final int Y  = 3;
 
     public BitwiseMultiplexer() {
         super("Bitwise Multiplexer", Strings.getter("bwmuxComponent"));

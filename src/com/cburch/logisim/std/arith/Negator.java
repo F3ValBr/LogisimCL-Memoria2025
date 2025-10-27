@@ -16,8 +16,8 @@ import com.cburch.logisim.instance.StdAttr;
 import com.cburch.logisim.tools.key.BitWidthConfigurator;
 
 public class Negator extends InstanceFactory {
-	private static final int IN    = 0;
-	private static final int OUT   = 1;
+	static final int IN    = 0;
+	static final int OUT   = 1;
 
 	public Negator() {
 		super("Negator", Strings.getter("negatorComponent"));
