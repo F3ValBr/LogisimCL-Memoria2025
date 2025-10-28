@@ -58,7 +58,7 @@ final class LayoutServices {
             a.setValue(Pin.ATTR_TRISTATE, false);
             a.setValue(StdAttr.FACING, Direction.EAST);
             a.setValue(StdAttr.LABEL, p.name());
-            a.setValue(Pin.ATTR_LABEL_LOC, Direction.NORTH);
+            a.setValue(Pin.ATTR_LABEL_LOC, Direction.WEST);
 
             Location loc = Location.create(ImporterUtils.Geom.snap(xInputs), ImporterUtils.Geom.snap(curInY));
             curInY += inStep;
@@ -77,7 +77,7 @@ final class LayoutServices {
             a.setValue(Pin.ATTR_TRISTATE, false);
             a.setValue(StdAttr.FACING, Direction.WEST);
             a.setValue(StdAttr.LABEL, p.name());
-            a.setValue(Pin.ATTR_LABEL_LOC, Direction.NORTH);
+            a.setValue(Pin.ATTR_LABEL_LOC, Direction.EAST);
 
             Location loc = Location.create(ImporterUtils.Geom.snap(xOutputs), ImporterUtils.Geom.snap(curOutY));
             curOutY += outStep;
