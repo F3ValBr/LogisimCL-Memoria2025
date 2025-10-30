@@ -314,6 +314,31 @@ public class PokeTool extends Tool {
                 g2m.setColor(oldC2);
                 g2m.setComposite(oldCp2);
             }
+
+            // ----- Indicadores direccionales estilo Canvas (si hay selección activa) -----
+            if (!matched.isEmpty() && selectedToken != null && !selectedToken.isBlank()) {
+                Rectangle vis = (clip != null) ? new Rectangle(clip) : canvas.getVisibleRect();
+                if (vis == null || vis.width <= 0 || vis.height <= 0) {
+                    vis = new Rectangle(0, 0, canvas.getWidth(), canvas.getHeight());
+                }
+
+                // Cuenta por cuadrante
+                java.util.EnumMap<EdgeDir, Integer> counts = new java.util.EnumMap<>(EdgeDir.class);
+
+                for (Component mc : matched) {
+                    Bounds mb = mc.getBounds(g);
+                    if (mb == null) continue;
+                    Point tgt = new Point(mb.getX() + mb.getWidth()/2, mb.getY() + mb.getHeight()/2);
+                    EdgeDir dir = edgeFor(tgt, vis);
+                    if (dir != null) counts.merge(dir, 1, Integer::sum);
+                }
+
+                // Dibuja flechas/badges en el borde por cada dirección con elementos off-screen
+                for (var e : counts.entrySet()) {
+                    Point edge = anchorOnEdge(vis, e.getKey());
+                    drawEdgeHint(g2, edge, e.getKey(), e.getValue());
+                }
+            }
         }
 
         @Override public Bounds getBounds(Graphics g) {
@@ -424,6 +449,128 @@ public class PokeTool extends Tool {
                 matched.clear();
                 canvas.getProject().repaintCanvas();
             }
+        }
+
+        // ===== Indicadores direccionales tipo Canvas =====
+        private enum EdgeDir { N, NE, E, SE, S, SW, W, NW }
+
+        private static EdgeDir edgeFor(Point p, Rectangle vis) {
+            boolean west  = p.x <  vis.x;
+            boolean east  = p.x >= vis.x + vis.width;
+            boolean north = p.y <  vis.y;
+            boolean south = p.y >= vis.y + vis.height;
+
+            if (north && west) return EdgeDir.NW;
+            if (north && east) return EdgeDir.NE;
+            if (south && west) return EdgeDir.SW;
+            if (south && east) return EdgeDir.SE;
+            if (north) return EdgeDir.N;
+            if (south) return EdgeDir.S;
+            if (west)  return EdgeDir.W;
+            if (east)  return EdgeDir.E;
+            return null; // dentro del viewport
+        }
+
+        // Devuelve un punto sobre el borde del viewport para dibujar el arrow/badge de esa dirección
+        private static Point anchorOnEdge(Rectangle vis, EdgeDir d) {
+            int cx = vis.x + vis.width / 2;
+            int cy = vis.y + vis.height / 2;
+            return switch (d) {
+                case N -> new Point(cx, vis.y);
+                case S -> new Point(cx, vis.y + vis.height - 1);
+                case W -> new Point(vis.x, cy);
+                case E -> new Point(vis.x + vis.width - 1, cy);
+                case NW -> new Point(vis.x, vis.y);
+                case NE -> new Point(vis.x + vis.width - 1, vis.y);
+                case SW -> new Point(vis.x, vis.y + vis.height - 1);
+                case SE -> new Point(vis.x + vis.width - 1, vis.y + vis.height - 1);
+            };
+        }
+
+        // Dibuja un triángulo/flecha pequeño con un badge (conteo) en el borde
+        private static void drawEdgeHint(Graphics2D g2, Point at, EdgeDir d, int count) {
+            Color oldC = g2.getColor();
+            Stroke oldS = g2.getStroke();
+
+            Polygon tri = getTri(at, d);
+
+            g2.setColor(new Color(255, 200, 0, 180));
+            g2.fillPolygon(tri);
+            g2.setColor(new Color(180, 130, 0));
+            g2.setStroke(new BasicStroke(1.8f));
+            g2.drawPolygon(tri);
+
+            // badge de conteo
+            if (count > 1) {
+                String s = Integer.toString(count);
+                Font f = g2.getFont();
+                Font f2 = f.deriveFont(Font.BOLD);
+                g2.setFont(f2);
+                FontMetrics fm = g2.getFontMetrics();
+
+                int r = 9; // radio
+                int bx = at.x + 10;
+                int by = at.y - 10;
+                // intenta posicionarlo hacia “dentro” del viewport
+                switch (d) {
+                    case N, NE, NW -> by = at.y + 10;
+                    case S, SE, SW -> by = at.y - 10;
+                }
+                switch (d) {
+                    case W, NW, SW -> bx = at.x + 10;
+                    case E, NE, SE -> bx = at.x - 10;
+                }
+
+                int w = fm.stringWidth(s);
+                int h = fm.getAscent();
+                int cx = bx;
+                int cy = by;
+
+                g2.setColor(new Color(255, 255, 255, 235));
+                g2.fillOval(cx - r, cy - r, 2*r, 2*r);
+                g2.setColor(new Color(90, 60, 0));
+                g2.setStroke(new BasicStroke(1.5f));
+                g2.drawOval(cx - r, cy - r, 2*r, 2*r);
+
+                g2.setColor(Color.BLACK);
+                g2.drawString(s, cx - w/2, cy + h/2 - 2);
+                g2.setFont(f);
+            }
+
+            g2.setStroke(oldS);
+            g2.setColor(oldC);
+        }
+
+        private static Polygon getTri(Point at, EdgeDir d) {
+            int sz = 12; // tamaño base flecha
+            Polygon tri = new Polygon();
+            switch (d) {
+                case N -> { tri.addPoint(at.x, at.y + 2);
+                    tri.addPoint(at.x - sz/2, at.y + sz);
+                    tri.addPoint(at.x + sz/2, at.y + sz); }
+                case S -> { tri.addPoint(at.x, at.y - 2);
+                    tri.addPoint(at.x - sz/2, at.y - sz);
+                    tri.addPoint(at.x + sz/2, at.y - sz); }
+                case W -> { tri.addPoint(at.x + 2, at.y);
+                    tri.addPoint(at.x + sz, at.y - sz/2);
+                    tri.addPoint(at.x + sz, at.y + sz/2); }
+                case E -> { tri.addPoint(at.x - 2, at.y);
+                    tri.addPoint(at.x - sz, at.y - sz/2);
+                    tri.addPoint(at.x - sz, at.y + sz/2); }
+                case NW -> { tri.addPoint(at.x + 2, at.y + 2);
+                    tri.addPoint(at.x + sz, at.y + 2);
+                    tri.addPoint(at.x + 2, at.y + sz); }
+                case NE -> { tri.addPoint(at.x - 2, at.y + 2);
+                    tri.addPoint(at.x - sz, at.y + 2);
+                    tri.addPoint(at.x - 2, at.y + sz); }
+                case SW -> { tri.addPoint(at.x + 2, at.y - 2);
+                    tri.addPoint(at.x + sz, at.y - 2);
+                    tri.addPoint(at.x + 2, at.y - sz); }
+                case SE -> { tri.addPoint(at.x - 2, at.y - 2);
+                    tri.addPoint(at.x - sz, at.y - 2);
+                    tri.addPoint(at.x - 2, at.y - sz); }
+            }
+            return tri;
         }
     }
 
