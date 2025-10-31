@@ -7,6 +7,7 @@ import com.cburch.logisim.verilog.comp.impl.VerilogCell;
 import com.cburch.logisim.verilog.comp.impl.VerilogModuleImpl;
 import com.cburch.logisim.verilog.layout.ModuleNetIndex;
 import org.eclipse.elk.alg.layered.options.LayeredOptions;
+import org.eclipse.elk.core.math.ElkPadding;
 import org.eclipse.elk.core.options.Direction;
 import org.eclipse.elk.core.options.EdgeLabelPlacement;
 import org.eclipse.elk.core.options.EdgeRouting;
@@ -120,11 +121,28 @@ public final class LayoutBuilder {
         // --- Grafo raíz y opciones ELK ---
         ElkNode root = ElkGraphUtil.createGraph();
         root.setProperty(CoreOptions.ALGORITHM, "org.eclipse.elk.layered");
+
+        // --- separaciones principales ---
+        // distancia entre capas (X si vas a la derecha)
+        root.setProperty(LayeredOptions.SPACING_EDGE_EDGE_BETWEEN_LAYERS, 80.0);  // por si hay muchas aristas
+        root.setProperty(LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS, 140.0); // distancia “mínima” entre capas
+        // distancia entre nodos de la misma capa (vertical, en tu caso)
         root.setProperty(LayeredOptions.SPACING_NODE_NODE, 100.0);
-        root.setProperty(CoreOptions.SPACING_COMPONENT_COMPONENT, 100.0);
-        root.setProperty(LayeredOptions.EDGE_ROUTING, EdgeRouting.POLYLINE);
+
+        // margen global entre “componentes” sueltos
+        root.setProperty(CoreOptions.SPACING_COMPONENT_COMPONENT, 140.0);
+
+        // si hay puertos o labels en el medio, a veces ayuda esto:
+        root.setProperty(CoreOptions.SPACING_LABEL_NODE, 20.0);
+        root.setProperty(CoreOptions.SPACING_PORT_PORT, 20.0);
+
+        // dirección
         root.setProperty(CoreOptions.DIRECTION, Direction.RIGHT);
+        root.setProperty(LayeredOptions.EDGE_ROUTING, EdgeRouting.POLYLINE);
         root.setProperty(LayeredOptions.EDGE_LABELS_PLACEMENT, EdgeLabelPlacement.CENTER);
+
+        // padding del diagrama entero
+        root.setProperty(CoreOptions.PADDING, new ElkPadding(40, 40, 40, 40));
 
         Result r = new Result(root);
 
