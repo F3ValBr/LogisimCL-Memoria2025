@@ -11,9 +11,7 @@ import com.cburch.logisim.verilog.comp.CellFactoryRegistry;
 import com.cburch.logisim.verilog.comp.impl.VerilogModuleBuilder;
 import com.cburch.logisim.verilog.file.jsonhdlr.YosysJsonNetlist;
 import com.cburch.logisim.verilog.file.materializer.ModuleMaterializer;
-import com.cburch.logisim.verilog.file.ui.ImportCompletionDialog;
-import com.cburch.logisim.verilog.file.ui.NavigationHelper;
-import com.cburch.logisim.verilog.file.ui.WarningCollector;
+import com.cburch.logisim.verilog.file.ui.*;
 import com.cburch.logisim.verilog.layout.auxiliary.DefaultNodeSizer;
 import com.cburch.logisim.verilog.layout.auxiliary.NodeSizer;
 import com.cburch.logisim.verilog.std.BuiltinPortMaps;
@@ -23,7 +21,9 @@ import com.cburch.logisim.verilog.std.adapters.gatelvl.RegisterGateOpAdapter;
 import com.cburch.logisim.verilog.std.adapters.gatelvl.GateOpAdapter;
 import com.cburch.logisim.verilog.std.adapters.ips.IPOpAdapter;
 import com.cburch.logisim.verilog.std.adapters.wordlvl.*;
+import com.fasterxml.jackson.databind.JsonNode;
 
+import javax.swing.*;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -73,6 +73,7 @@ public final class VerilogJsonImporter {
      * @param proj The project to import into.
      */
     public void importInto(Project proj) {
+        // 1. init port maps
         BuiltinPortMaps.initOnce(
                 proj.getLogisimFile(),
                 List.of(
@@ -82,45 +83,91 @@ public final class VerilogJsonImporter {
                         new PlexersPortMapRegister(),
                         new YosysComponentsPortMapRegister()
                 ));
+
         xWarnings.clear();
 
-        // Show file chooser and load JSON
-        var res = proj.getLogisimFile().getLoader().JSONImportChooserWithPath(proj.getFrame());
-        if (res == null || res.root() == null || res.path() == null) return;
+        var chooserRes = proj.getLogisimFile()
+                .getLoader()
+                .JSONImportChooserWithPath(proj.getFrame());
+        if (chooserRes == null || chooserRes.root() == null || chooserRes.path() == null)
+            return;
 
-        this.baseDir = res.path().getParent();
+        final JsonNode rootJson = chooserRes.root();
+        final java.nio.file.Path basePath  = chooserRes.path();
+        this.baseDir = basePath.getParent();
 
-        // Parse JSON netlist
-        YosysJsonNetlist netlist = YosysJsonNetlist.from(res.root());
+        final JFrame owner = proj.getFrame();
+        // dialog handler
+        final ImportProgressDialog dlg = new ImportProgressDialog(owner);
 
-        // Run import pipeline
-        ImportPipeline pipeline = new ImportPipeline(
-                proj, registry, builder, memoryAdapter, adapter, sizer,
-                xWarnings,
-                new LayoutServices(MIN_X, MIN_Y, GRID, PAD_X, SEPARATION_INPUT_CELLS),
-                new TunnelPlacer(GRID),
-                new ConstantPlacer(GRID),
-                new SpecBuilder(xWarnings)
-        );
+        SwingWorker<Circuit, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Circuit doInBackground() throws Exception {
+                // parse JSON netlist
+                dlg.onStart("Analizando netlist…");
+                YosysJsonNetlist netlist = YosysJsonNetlist.from(rootJson);
 
-        // Import main module and related modules
-        Circuit main = pipeline.run(netlist);
+                // run import pipeline
+                dlg.onPhase("Preparando importación…");
+                ImportPipeline pipeline = new ImportPipeline(
+                        proj,
+                        registry,
+                        builder,
+                        memoryAdapter,
+                        adapter,
+                        sizer,
+                        xWarnings,
+                        new LayoutServices(MIN_X, MIN_Y, GRID, PAD_X, SEPARATION_INPUT_CELLS),
+                        new TunnelPlacer(GRID),
+                        new ConstantPlacer(GRID),
+                        new SpecBuilder(xWarnings),
+                        dlg
+                );
 
-        // Show missing modules dialog if needed
-        if (main != null) {
-            var choice = ImportCompletionDialog.show(proj.getFrame(), main.getName());
-            if (choice == ImportCompletionDialog.Choice.GO_TO_MODULE) {
-                if (!NavigationHelper.switchToCircuit(proj, main)) {
-                    NavigationHelper.showManualSwitchHint(proj, main);
+                // import main module and related modules
+                dlg.onPhase("Importando módulos…");
+                Circuit main = pipeline.run(netlist);
+
+                dlg.onDone();
+                return main;
+            }
+
+            @Override
+            protected void done() {
+                if (dlg.isShowing()) {
+                    dlg.setVisible(false);
+                    dlg.dispose();
+                }
+                Circuit main = null;
+                try {
+                    main = get();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(
+                            owner,
+                            "No se pudo importar: " + ex.getMessage(),
+                            "Error al importar",
+                            JOptionPane.ERROR_MESSAGE
+                    );
+                    ex.printStackTrace();
+                }
+
+                if (main != null) {
+                    var choice = ImportCompletionDialog.show(owner, main.getName());
+                    if (choice == ImportCompletionDialog.Choice.GO_TO_MODULE) {
+                        if (!NavigationHelper.switchToCircuit(proj, main)) {
+                            NavigationHelper.showManualSwitchHint(proj, main);
+                        }
+                    }
+                }
+
+                if (xWarnings.hasWarnings()) {
+                    showXWarningDialogLater(proj, xWarnings);
                 }
             }
-        }
-        // Show warnings if any
-        if (xWarnings.hasWarnings()) {
-            showXWarningDialogLater(proj, xWarnings);
-        }
+        };
 
-        netlist = null;
+        worker.execute();
+        dlg.setVisible(true);
     }
 
     /* ===== Materializer ===== */
@@ -132,14 +179,29 @@ public final class VerilogJsonImporter {
     private ModuleMaterializer createFileSystemMaterializer() {
         return new FileSystemMaterializer(
                 () -> baseDir,
-                (proj, nl, name) -> new ImportPipeline(
-                        proj, registry, builder, memoryAdapter, adapter, sizer,
-                        xWarnings,
-                        new LayoutServices(MIN_X, MIN_Y, GRID, PAD_X, SEPARATION_INPUT_CELLS),
-                        new TunnelPlacer(GRID),
-                        new ConstantPlacer(GRID),
-                        new SpecBuilder(xWarnings)
-                ).materializeSingleModule(nl, name),
+                (proj, nl, name) -> {
+                    ImportProgress silent = new ImportProgress() {
+                        @Override public void onStart(String msg) { /* no-op */ }
+                        @Override public void onPhase(String msg) { /* no-op */ }
+                        @Override public void onDone() { /* no-op */ }
+                        @Override public void onError(String msg, Throwable cause) { cause.printStackTrace(); }
+                    };
+
+                    new ImportPipeline(
+                            proj,
+                            registry,
+                            builder,
+                            memoryAdapter,
+                            adapter,
+                            sizer,
+                            xWarnings,
+                            new LayoutServices(MIN_X, MIN_Y, GRID, PAD_X, SEPARATION_INPUT_CELLS),
+                            new TunnelPlacer(GRID),
+                            new ConstantPlacer(GRID),
+                            new SpecBuilder(xWarnings),
+                            silent
+                    ).materializeSingleModule(nl, name);
+                },
                 () -> importAllRemaining,
                 v -> importAllRemaining = v
         );

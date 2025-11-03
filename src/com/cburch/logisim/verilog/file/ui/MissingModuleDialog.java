@@ -1,5 +1,7 @@
 package com.cburch.logisim.verilog.file.ui;
 
+import com.cburch.logisim.verilog.file.Strings;
+
 import javax.swing.*;
 import java.awt.*;
 import java.nio.file.Path;
@@ -9,22 +11,19 @@ public final class MissingModuleDialog {
     public enum Choice { IMPORT_THIS, SKIP_THIS, IMPORT_ALL }
 
     public static Choice ask(Component parent, String moduleName, Path filePath) {
-        final String title = "Importar submódulo encontrado";
-        final String message = """
-                Se encontró un JSON que contiene el módulo requerido:
-                Módulo: %s
-                Archivo: %s
-
-                ¿Deseas importarlo?
-                """.formatted(moduleName, filePath.getFileName());
+        final String title = Strings.get("import.missing.title");
+        final String message = Strings.get(
+                "import.missing.message",
+                moduleName,
+                filePath.getFileName().toString()
+        );
 
         final Object[] options = {
-                "Importar este",
-                "No importar",
-                "Importar este y todos los siguientes"
+                Strings.get("import.missing.opt.this"),
+                Strings.get("import.missing.opt.skip"),
+                Strings.get("import.missing.opt.all")
         };
 
-        // Asegura llamada en EDT
         final int[] result = new int[1];
         Runnable r = () -> result[0] = JOptionPane.showOptionDialog(
                 parent,

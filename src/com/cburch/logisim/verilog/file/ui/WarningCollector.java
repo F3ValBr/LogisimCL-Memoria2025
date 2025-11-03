@@ -1,6 +1,8 @@
 package com.cburch.logisim.verilog.file.ui;
 
 import com.cburch.logisim.proj.Project;
+import com.cburch.logisim.verilog.file.Strings;
+
 
 import javax.swing.*;
 import java.util.ArrayList;
@@ -25,11 +27,12 @@ public final class WarningCollector {
         String normNote  = (note  == null) ? "" : note.trim();
 
         String key = normScope + "|" + normPort + "|" + bitIndex + "|" + normNote;
-        if (!keys.add(key)) return; // ya registrado
+        if (!keys.add(key)) return;
 
-        String msg = String.format(" • %s :: puerto %s, bit %d → X%s",
-                normScope, normPort, bitIndex,
-                normNote.isEmpty() ? "" : " (" + normNote + ")");
+        // " • {0} :: puerto {1}, bit {2} → X{3}"
+        String extra = normNote.isEmpty() ? "" : " (" + normNote + ")";
+        String msg = Strings.get("import.warn.xbit.line",
+                normScope, normPort, String.valueOf(bitIndex), extra);
         lines.add(msg);
     }
 
@@ -39,9 +42,8 @@ public final class WarningCollector {
         String norm = text.trim();
         if (norm.isEmpty()) return;
 
-        String msg = " • " + norm;
         if (keys.add("GEN|" + norm)) {
-            lines.add(msg);
+            lines.add(" • " + norm);
         }
     }
 
@@ -50,16 +52,18 @@ public final class WarningCollector {
     public String summary() {
         int n = lines.size();
         if (n == 0) return "";
-        return (n == 1)
-                ? "Se detectó 1 bit indeterminado (X) durante la importación."
-                : "Se detectaron " + n + " bits indeterminados (X) durante la importación.";
+        if (n == 1) {
+            return Strings.get("import.warn.xbit.summary.one");
+        }
+        // "Se detectaron {0} bits..."
+        return Strings.get("import.warn.xbit.summary.many", n);
     }
 
     public String details() {
         StringBuilder sb = new StringBuilder();
-        sb.append("ADVERTENCIAS DE IMPORTACIÓN (bits X detectados)\n\n");
+        sb.append(Strings.get("import.warn.xbit.details.title")).append("\n\n");
         for (String s : lines) sb.append(s).append('\n');
-        sb.append("\nCausa típica: conexiones no resueltas, Z/alta impedancia, o constantes 'x' en el JSON.\n");
+        sb.append(Strings.get("import.warn.xbit.details.footer"));
         return sb.toString();
     }
 
@@ -81,23 +85,33 @@ public final class WarningCollector {
         SwingUtilities.invokeLater(() -> {
             java.awt.Component parent = (proj.getFrame() != null) ? proj.getFrame() : null;
 
-            String summary = warnings.summary() + "\n\n" +
-                    "Esto puede producir salidas 'desconocidas' en simulación.\n" +
-                    "Causa típica: bits sin fuente, alta impedancia (Z) o 'x' en el JSON.";
+            String summary = warnings.summary();
+            if (summary == null || summary.isBlank()) return;
 
-            String[] options = { "Ver detalles…", "OK" };
+            String body = summary + "\n\n" + Strings.get("import.warn.xbit.dialog.body");
+
+            String[] options = {
+                    Strings.get("import.warn.xbit.dialog.btn.details"),
+                    Strings.get("import.warn.xbit.dialog.btn.ok")
+            };
+
             int sel = JOptionPane.showOptionDialog(
                     parent,
-                    summary,
-                    "Advertencia: bits X detectados",
+                    body,
+                    Strings.get("import.warn.xbit.dialog.title"),
                     JOptionPane.DEFAULT_OPTION,
                     JOptionPane.WARNING_MESSAGE,
                     null, options, options[1]
             );
 
             if (sel == 0) {
-                showDetailsDialog(parent, "Detalles de bits X", warnings.details());
+                showDetailsDialog(
+                        parent,
+                        Strings.get("import.warn.xbit.details.window.title"),
+                        warnings.details()
+                );
             }
         });
     }
 }
+

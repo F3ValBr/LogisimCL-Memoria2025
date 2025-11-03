@@ -1,5 +1,7 @@
 package com.cburch.logisim.verilog.file.ui;
 
+import com.cburch.logisim.verilog.file.Strings;
+
 import javax.swing.JOptionPane;
 import java.awt.Component;
 
@@ -9,18 +11,15 @@ public final class ImportCompletionDialog {
 
     public enum Choice { GO_TO_MODULE, STAY_HERE }
 
-    /**
-     * Muestra un diálogo al finalizar la importación.
-     * @param parent componente padre (usa el frame del proyecto)
-     * @param moduleName nombre del módulo/circuito principal importado
-     * @return elección del usuario
-     */
     public static Choice show(Component parent, String moduleName) {
-        String title = "Importación completada";
-        String msg   = "La importación ha finalizado.\n"
-                + "¿Quieres ir al módulo \"" + moduleName + "\" o quedarte en el circuito actual?";
+        String title = Strings.get("import.done.title");
+        String msg   = Strings.get("import.done.message", moduleName);
 
-        Object[] options = { "Ir al módulo", "Quedarme aquí" };
+        Object[] options = {
+                Strings.get("import.done.goto"),
+                Strings.get("import.done.stay")
+        };
+
         int sel = JOptionPane.showOptionDialog(
                 parent,
                 msg,
@@ -34,3 +33,4 @@ public final class ImportCompletionDialog {
         return (sel == JOptionPane.YES_OPTION) ? Choice.GO_TO_MODULE : Choice.STAY_HERE;
     }
 }
+

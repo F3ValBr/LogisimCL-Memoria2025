@@ -6,6 +6,7 @@ import com.cburch.logisim.gui.main.Canvas;
 import com.cburch.logisim.gui.main.Frame;
 import com.cburch.logisim.proj.Action;
 import com.cburch.logisim.proj.Project;
+import com.cburch.logisim.verilog.file.Strings;
 
 
 import javax.swing.*;
@@ -72,9 +73,8 @@ public final class NavigationHelper {
         try {
             JOptionPane.showMessageDialog(
                     proj != null ? proj.getFrame() : null,
-                    "No pude cambiar automáticamente al circuito \"" + target.getName() + "\".\n" +
-                            "Ábrelo manualmente desde el panel de circuitos del proyecto.",
-                    "Cambiar de circuito",
+                    Strings.get("import.nav.cannot.switch", target.getName()),
+                    Strings.get("import.nav.cannot.switch.title"),
                     JOptionPane.INFORMATION_MESSAGE
             );
         } catch (Throwable ignore) {}
