@@ -114,13 +114,13 @@ public class LocaleManager {
 			}
 			if (s != null) {
 				if (ret == null) ret = new HashMap<Character,String>();
-				ret.put(new Character(c), s);
+				ret.put(c, s);
 			}
 		}
 		return ret;
 	}
 
-	public static void addLocaleListener(LocaleListener l) {
+    public static void addLocaleListener(LocaleListener l) {
 		listeners.add(l);
 	}
 
