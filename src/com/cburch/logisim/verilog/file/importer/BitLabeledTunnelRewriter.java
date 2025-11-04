@@ -212,7 +212,7 @@ public final class BitLabeledTunnelRewriter {
             }
 
             if (!mut.isEmpty()) {
-                proj.doAction(mut.toAction(Strings.getter("rewriteBitTunnelsToPlainTunnelsAction")));
+                proj.doAction(mut.toAction(Strings.getter("rewriteBitTunnelsAction")));
             }
         }
     }
