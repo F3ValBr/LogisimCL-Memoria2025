@@ -8,7 +8,6 @@ import com.cburch.logisim.tools.key.KeyConfigurationResult;
 import com.cburch.logisim.tools.key.KeyConfigurator;
 
 import java.awt.*;
-import java.util.Arrays;
 
 public class DynamicShifter extends InstanceFactory {
     private static final int DELAY = 3;
@@ -202,87 +201,82 @@ public class DynamicShifter extends InstanceFactory {
     }
 
     /** --- $shift según Yosys ---
-     * Desplazamiento lógico o aritmético variable con salida de ancho independiente.
-     * Si el desplazamiento apunta fuera de A, se rellena con 0 (lógico) o con el bit de signo (aritmético).
+     * Y =  (B_SIGNED && B<0) ?  (A << -B)  :  (A_SIGNED ? A >>>_arith B : A >>>_logic B)
+     * La salida tiene ancho yW independiente.
      */
     private static Value evalShift(Value vA, Value vB, int aW,
                                    boolean aSigned, boolean bSigned,
                                    int yW, int bW) {
         BitWidth outW = BitWidth.create(yW);
         if (vA == null || vB == null) return Value.createError(outW);
-        if (!vB.isFullyDefined()) return Value.createError(outW);
+        if (!vB.isFullyDefined())      return Value.createError(outW);
 
-        int amt = vB.toIntValue();
-        if (!bSigned) {
-            int mask = (bW >= 31) ? -1 : ((1 << bW) - 1);
-            amt &= mask; // unsigned => nunca negativo
-        }
+        // 1) amount según signo de B
+        int rawAmt = vB.toIntValue();
+        int amt = bSigned ? (int) signExtend(rawAmt, bW)
+                : (rawAmt & (bW >= 31 ? -1 : ((1 << bW) - 1)));
 
+        // 2) Caso A no totalmente definida: construimos Y directamente de tamaño yW
         if (!vA.isFullyDefined()) {
-            Value[] a = vA.getAll();
-            Value[] y = new Value[aW];
+            Value[] aBits = vA.getAll();     // LSB..MSB, longitud aW
+            Value[] yBits = new Value[yW];
 
-            if (!bSigned) {
-                int d = Math.min(amt, aW);
-                System.arraycopy(a, d, y, 0, aW - d);
-                Arrays.fill(y, aW - d, aW, Value.FALSE);
+            if (bSigned && amt < 0) {
+                // LEFT shift por k = -amt, relleno 0
+                int k = Math.min(-amt, Integer.MAX_VALUE);
+                for (int i = 0; i < yW; i++) {
+                    int src = i - k;
+                    yBits[i] = (src >= 0 && src < aW) ? aBits[src] : Value.FALSE;
+                }
             } else {
-                if (amt < 0) {
-                    int d = Math.min(-amt, aW);
-                    Arrays.fill(y, 0, d, Value.FALSE);
-                    System.arraycopy(a, 0, y, d, aW - d);
-                } else {
-                    int d = Math.min(amt, aW);
-                    System.arraycopy(a, d, y, 0, aW - d);
-                    Value fill = aSigned ? a[aW - 1] : Value.FALSE;
-                    Arrays.fill(y, aW - d, aW, fill);
+                // RIGHT shift por k = max(amt,0), arith si A signed, lógico si no
+                int k = Math.max(amt, 0);
+                Value fill = aSigned ? aBits[Math.max(0, aW - 1)] : Value.FALSE;
+                for (int i = 0; i < yW; i++) {
+                    int src = i + k;
+                    yBits[i] = (src >= 0 && src < aW) ? aBits[src] : fill;
                 }
             }
-            // Ajuste a yW (LSB..)
-            if (yW != aW) {
-                Value[] out = new Value[yW];
-                Value fill = aSigned ? y[aW - 1] : Value.FALSE;
-                for (int i = 0; i < yW; i++) out[i] = (i < aW ? y[i] : fill);
-                return Value.create(out);
-            }
-            return Value.create(y);
-        } else {
-            int x = vA.toIntValue();
-            int y;
-            if (!bSigned) {
-                int d = Math.min(amt, aW);
-                y = x >>> d;
-            } else {
-                if (amt < 0) {
-                    int d = Math.min(-amt, aW);
-                    y = x << d;
-                } else {
-                    int d = Math.min(amt, aW);
-                    if (aSigned) {
-                        if (d >= aW) d = aW - 1;
-                        int sign = (x >> (aW - 1)) & 1;
-                        y = x >> d;
-                        if (sign == 1 && d > 0) {
-                            int fillMask = ~((1 << (aW - d)) - 1);
-                            y |= fillMask;
-                        }
-                    } else {
-                        y = x >>> d;
-                    }
-                }
-            }
-            // enmascarar a aW
-            int mask = (aW >= 31) ? -1 : ((1 << aW) - 1);
-            y &= mask;
-
-            // ajustar a yW
-            if (yW != aW) {
-                int outMask = (yW >= 31) ? -1 : ((1 << yW) - 1);
-                y &= outMask;
-                return Value.createKnown(BitWidth.create(yW), y);
-            }
-            return Value.createKnown(BitWidth.create(aW), y);
+            return Value.create(yBits);
         }
+
+        // 3) Caso A totalmente definida: calcula en ancho "amplio" y luego recorta a yW
+        int xi = vA.toIntValue();
+        long aUnsigned = unsigned(xi, aW);
+        long aSigned64 = signExtend(xi, aW);
+
+        long res;
+        if (bSigned && amt < 0) {
+            // LEFT shift lógico por k = -amt (sin enmascarar a aW)
+            int k = Math.min(-amt, 63); // evitar overflow de shift
+            res = (aUnsigned << k);
+        } else {
+            // RIGHT shift por k = max(amt,0)
+            int k = Math.min(Math.max(amt, 0), 63);
+            if (aSigned) {
+                res = (aSigned64 >> k);   // aritmético (sign-extended)
+            } else {
+                res = (aUnsigned >>> k);  // lógico
+            }
+        }
+
+        // 4) Recortar a yW (la salida)
+        long maskY = yW >= 63 ? -1L : ((1L << yW) - 1L);
+        int outVal = (int) (res & maskY);
+        return Value.createKnown(outW, outVal);
+    }
+
+    /* ==== helpers numéricos ==== */
+    private static long mask(int w) {
+        return (w >= 63) ? -1L : ((1L << w) - 1L);
+    }
+    private static long unsigned(int val, int w) {
+        return ((long) val) & mask(w);
+    }
+    private static long signExtend(int val, int w) {
+        long u = ((long) val) & mask(w);
+        long sign = 1L << (w - 1);
+        return (u ^ sign) - sign; // extiende signo a 64 bits
     }
 
     @Override
