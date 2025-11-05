@@ -61,7 +61,13 @@ public final class UnaryOpAdapter extends AbstractComponentAdapter
             }
 
             int width = guessUnaryWidth(cell.params());
+            boolean signed = false;
+            if (cell.params() instanceof UnaryOpParams up) {
+                signed = up.aSigned();
+            }
+
             AttributeSet attrs = lf.factory().createAttributeSet();
+            setOptionByName(attrs, "signMode", signed ? "signed" : "unsigned");
             try { attrs.setValue(StdAttr.WIDTH, BitWidth.create(width)); } catch (Exception ignore) {}
             try { attrs.setValue(StdAttr.LABEL, cleanCellName(cell.name())); } catch (Exception ignore) {}
 

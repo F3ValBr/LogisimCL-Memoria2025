@@ -154,7 +154,7 @@ final class SpecBuilder {
             }
         }
 
-        if (hasX) return "X_UNDEF_" + bits;
+        if (hasX) return "X_UNDEF_" + bits + "_" + (int) (Math.random()*10000);
         if (ordered.isEmpty()) return "";
 
         ordered.sort(Integer::compareTo);

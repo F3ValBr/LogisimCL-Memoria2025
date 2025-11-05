@@ -28,10 +28,10 @@ public final class UnaryOpComposer extends BaseComposer {
     /* ==== Public API: devuelve la instancia del submódulo (InstanceHandle) ==== */
 
     /** $reduce_or/$reduce_bool(A) := NOT( A == 0 ). */
-    public InstanceHandle buildReduceOrAsSubckt(ComposeCtx ctx, VerilogCell cell, Location where, int aWidth)
+    public InstanceHandle buildReduceOrAsSubckt(ComposeCtx ctx, VerilogCell cell, Location where, int aWidth, boolean isBool)
             throws CircuitException {
         require(ctx.fx.cmpF, "Comparator"); require(ctx.fx.notF, "NOT Gate"); require(ctx.fx.pinF, "Pin");
-        final String name = MacroSubcktKit.macroName("reduce_or", aWidth);
+        final String name = MacroSubcktKit.macroName(isBool ? "reduce_bool" : "reduce_or", aWidth);
 
         UnaryOpParams p = new UnaryOpParams(UnaryOp.REDUCE_OR, cell.params().asMap());
 

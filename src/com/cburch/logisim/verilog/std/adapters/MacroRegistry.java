@@ -39,11 +39,11 @@ public final class MacroRegistry {
 
         reg.register(UnaryOp.REDUCE_OR.yosysId(), (ctx, cell, where) -> {
             int w = guessUnaryWidth(cell.params());
-            return u.buildReduceOrAsSubckt(ctx, cell, where, w);
+            return u.buildReduceOrAsSubckt(ctx, cell, where, w, false);
         });
         reg.register(UnaryOp.REDUCE_BOOL.yosysId(), (ctx, cell, where) -> {
             int w = guessUnaryWidth(cell.params());
-            return u.buildReduceOrAsSubckt(ctx, cell, where, w);
+            return u.buildReduceOrAsSubckt(ctx, cell, where, w, true);
         });
         reg.register(UnaryOp.REDUCE_AND.yosysId(), (ctx, cell, where) -> {
             int w = guessUnaryWidth(cell.params());
