@@ -173,7 +173,7 @@ public final class GridRouter {
     }
 
     // dentro de GridRouter
-    private static final int TURN_COST = 20;   // súbelo si quieres aún menos giros
+    private static final int TURN_COST = 30;   // súbelo si quieres aún menos giros
     private static final int STRAIGHT_BONUS = -2; // pequeño "descuento" si sigues recto
 
     /**
