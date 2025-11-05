@@ -90,7 +90,6 @@ public class Negator extends InstanceFactory {
         if (in.isFullyDefined()) {
             out = negateFullyDefined(width, in, signed);
         } else {
-            // Mantén tu comportamiento “cuidadoso” para indefinidos/errores
             out = negateUnknown(width, in);
         }
 
@@ -139,8 +138,7 @@ public class Negator extends InstanceFactory {
 
     /**
      * Rutina de negación para casos no completamente definidos.
-     * Conserva la idea original: propaga UNKNOWN/ERROR con una aproximación estable.
-     * (No depende del modo de signo: con indefinidos no hay semántica aritmética fiable.)
+     * propaga UNKNOWN/ERROR con una aproximación estable.
      */
     private static Value negateUnknown(BitWidth w, Value in) {
         Value[] bits = in.getAll();
