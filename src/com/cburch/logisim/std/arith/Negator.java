@@ -90,7 +90,7 @@ public class Negator extends InstanceFactory {
         if (in.isFullyDefined()) {
             out = negateFullyDefined(width, in, signed);
         } else {
-            out = negateUnknown(width, in);
+            out = negateUnknown(in);
         }
 
         int delay = (width.getWidth() + 2) * Adder.PER_DELAY;
@@ -140,7 +140,7 @@ public class Negator extends InstanceFactory {
      * Rutina de negación para casos no completamente definidos.
      * propaga UNKNOWN/ERROR con una aproximación estable.
      */
-    private static Value negateUnknown(BitWidth w, Value in) {
+    private static Value negateUnknown(Value in) {
         Value[] bits = in.getAll();
         Value fill = Value.FALSE;
         int pos = 0;
