@@ -17,13 +17,13 @@ public abstract class AbstractVerilogCellFactory implements VerilogCellFactory {
         return Integer.parseUnsignedInt(s, 2);
     }
 
-    protected Direction toDirection(String d) {
-        if (d == null) return Direction.UNKNOWN;
+    protected PortDirection toDirection(String d) {
+        if (d == null) return PortDirection.UNKNOWN;
         return switch (d.toLowerCase()) {
-            case "input" -> Direction.INPUT;
-            case "output" -> Direction.OUTPUT;
-            case "inout" -> Direction.INOUT;
-            default -> Direction.UNKNOWN;
+            case "input" -> PortDirection.INPUT;
+            case "output" -> PortDirection.OUTPUT;
+            case "inout" -> PortDirection.INOUT;
+            default -> PortDirection.UNKNOWN;
         };
     }
 
@@ -62,7 +62,7 @@ public abstract class AbstractVerilogCellFactory implements VerilogCellFactory {
         portNames.addAll(connections.keySet());
 
         for (String portName : portNames) {
-            Direction dir = toDirection(portDirections.get(portName)); // UNKNOWN si falta o inválido
+            PortDirection dir = toDirection(portDirections.get(portName)); // UNKNOWN si falta o inválido
             List<Object> rawBits = connections.getOrDefault(portName, List.of());
 
             PortSignature signature = new PortSignature(

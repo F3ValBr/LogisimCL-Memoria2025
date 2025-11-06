@@ -8,7 +8,8 @@ import com.cburch.logisim.verilog.comp.auxiliary.FactoryLookup;
 
 /** Cache de factories (cárgalo una vez por Project). */
 public final class Factories {
-    public final ComponentFactory cmp;         // Arithmetic → Comparator
+    public final ComponentFactory cmpF;         // Arithmetic → Comparator
+    public final ComponentFactory muxF;         // Plexers    → Multiplexer
     public final ComponentFactory constF;      // Wiring    → Constant
     public final ComponentFactory pinF;        // Wiring    → Pin
     public final ComponentFactory bitExtendF;  // Wiring    → Bit Extender
@@ -18,13 +19,15 @@ public final class Factories {
     public final ComponentFactory oddParityF;  // Gates     → Odd Parity
     public final ComponentFactory evenParityF; // Gates     → Even Parity
 
-    private Factories(ComponentFactory cmp,
+    private Factories(ComponentFactory cmpF,
+                      ComponentFactory muxF,
                       ComponentFactory constF, ComponentFactory bitExtendF,
                       ComponentFactory notF,
                       ComponentFactory andF, ComponentFactory orF,
                       ComponentFactory oddP, ComponentFactory evenP,
                       ComponentFactory pinF) {
-        this.cmp = cmp;
+        this.cmpF = cmpF;
+        this.muxF = muxF;
         this.constF = constF;
         this.bitExtendF = bitExtendF;
         this.notF = notF;
@@ -41,6 +44,7 @@ public final class Factories {
         Library arithmetic = getLib(lf, "Arithmetic");
         Library wiring     = getLib(lf, "Wiring");
         Library gates      = getLib(lf, "Gates");
+        Library plexers    = getLib(lf, "Plexers");
 
         ComponentFactory cmp        = find(arithmetic, "Comparator");
         ComponentFactory k          = find(wiring,     "Constant");
@@ -49,17 +53,19 @@ public final class Factories {
         ComponentFactory not        = find(gates,      "NOT Gate", "NOT");
         ComponentFactory and        = find(gates,      "AND Gate", "AND");
         ComponentFactory or         = find(gates,      "OR Gate",  "OR");
+        ComponentFactory mux        = find(plexers,    "Multiplexer", "Mux");
         ComponentFactory podd       = find(gates,      "Odd Parity",  "Parity (Odd)", "Parity-Odd");
         ComponentFactory pevn       = find(gates,      "Even Parity", "Parity (Even)","Parity-Even");
 
-        return new Factories(cmp, k, bitExtend, not, and, or, podd, pevn, pin);
+        return new Factories(cmp, mux, k, bitExtend, not, and, or, podd, pevn, pin);
     }
 
     /** Lanza excepción si falta alguno de los factories requeridos. */
     public void validate(String... required) {
         for (String r : required) {
             boolean ok = switch (r) {
-                case "cmp" -> cmp != null;
+                case "cmp" -> cmpF != null;
+                case "mux" -> muxF != null;
                 case "const" -> constF != null;
                 case "bitExtend" -> bitExtendF != null;
                 case "not" -> notF != null;
@@ -76,7 +82,8 @@ public final class Factories {
 
     @Override public String toString() {
         return "Factories{" +
-                "cmp=" + (cmp!=null) +
+                "cmp=" + (cmpF!=null) +
+                ", mux=" + (muxF!=null) +
                 ", const=" + (constF!=null) +
                 ", bitExtend=" + (bitExtendF!=null) +
                 ", not=" + (notF!=null) +

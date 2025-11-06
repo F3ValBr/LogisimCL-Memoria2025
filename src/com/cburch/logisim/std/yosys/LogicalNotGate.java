@@ -11,8 +11,8 @@ public class LogicalNotGate extends InstanceFactory {
     private static final int DELAY = 2;
 
     // Puertos
-    private static final int A   = 0;
-    private static final int OUT = 1;
+    static final int A   = 0;
+    static final int OUT = 1;
 
     public LogicalNotGate() {
         super("Logical NOT Gate", Strings.getter("logicNotGateComponent"));

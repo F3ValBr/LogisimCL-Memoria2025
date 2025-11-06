@@ -7,8 +7,7 @@ import com.cburch.logisim.data.AttributeSet;
 import com.cburch.logisim.data.Location;
 import com.cburch.logisim.file.LogisimFile;
 import com.cburch.logisim.file.LogisimFileActions;
-import com.cburch.logisim.instance.InstanceFactory;
-import com.cburch.logisim.instance.StdAttr;
+import com.cburch.logisim.instance.*;
 import com.cburch.logisim.verilog.std.InstanceHandle;
 import com.cburch.logisim.verilog.std.adapters.BaseComposer;
 
@@ -36,13 +35,26 @@ public final class MacroSubcktKit extends BaseComposer {
         return null;
     }
 
-    /** Crea (si no existe) el subcircuito y ejecuta 'populate' (que debe crear también los pins). */
+    /** Versión simple (compatibilidad): asume orden ["A","Y"]. */
     public InstanceHandle ensureAndInstantiate(
             ComposeCtx ctx,
             String macroName,
             BiConsumer<ComposeCtx, Circuit> populateInternal,
             Location placeInParent,
             String labelForInstance
+    ) throws CircuitException {
+        return ensureAndInstantiate(ctx, macroName, populateInternal, placeInParent, labelForInstance,
+                List.of("A", "Y"));
+    }
+
+    /** Versión recomendada: especifica el orden lógico de puertos del subckt. */
+    public InstanceHandle ensureAndInstantiate(
+            ComposeCtx ctx,
+            String macroName,
+            BiConsumer<ComposeCtx, Circuit> populateInternal,
+            Location placeInParent,
+            String labelForInstance,
+            List<String> portOrder
     ) throws CircuitException {
         LogisimFile file = ctx.proj.getLogisimFile();
         Circuit macro = find(file, macroName);
@@ -61,7 +73,18 @@ public final class MacroSubcktKit extends BaseComposer {
         AttributeSet attrs = fac.createAttributeSet();
         try { attrs.setValue(StdAttr.LABEL, labelForInstance); } catch (Exception ignore) {}
 
-        Component inst = add(ctx, fac, placeInParent, attrs);
-        return new InstanceHandle(inst, (p,b) -> inst.getLocation());
+        Component comp = add(ctx, fac, placeInParent, attrs);
+
+        // Construye name->índice a partir del orden indicado
+        Map<String,Integer> nameToIdx = new LinkedHashMap<>();
+        for (int i = 0; i < portOrder.size(); i++) {
+            String name = portOrder.get(i);
+            if (name != null && !name.isEmpty()) {
+                nameToIdx.put(name, i);
+            }
+        }
+
+        PortGeom pg = PortGeom.of(comp, nameToIdx);
+        return new InstanceHandle(comp, pg);
     }
 }

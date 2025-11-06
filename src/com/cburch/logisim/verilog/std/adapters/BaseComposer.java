@@ -13,6 +13,7 @@ import com.cburch.logisim.verilog.std.Strings;
 import com.cburch.logisim.verilog.std.macrocomponents.ComposeCtx;
 
 import static com.cburch.logisim.verilog.std.AbstractComponentAdapter.cleanCellName;
+import static com.cburch.logisim.verilog.std.AbstractComponentAdapter.setParsedIfPresent;
 import static com.cburch.logisim.verilog.std.adapters.ComponentComposer.setByNameParsed;
 
 /** Base con helpers compartidos para todos los compositores. */
@@ -49,7 +50,7 @@ public abstract class BaseComposer {
 
     protected Component addPin(ComposeCtx ctx, String name, boolean isOutput, int width, Location where)
             throws CircuitException {
-        if (ctx.fx.pinF == null) throw new CircuitException("Pin factory not found (Wiring library)");
+        if (ctx.fx.pinF == null) throw new CircuitException(Strings.get("noPinFactoryError"));
         AttributeSet a = ctx.fx.pinF.createAttributeSet();
         try { a.setValue(StdAttr.LABEL, name); } catch (Exception ignore) {}
         try { a.setValue(StdAttr.WIDTH, BitWidth.create(Math.max(1, width))); } catch (Exception ignore) {}
@@ -62,6 +63,18 @@ public abstract class BaseComposer {
     protected String lbl(VerilogCell cell){ return cleanCellName(cell.name()); }
 
     protected static void require(ComponentFactory f, String name) throws CircuitException {
-        if (f == null) throw new CircuitException(name + " not found");
+        if (f == null) {
+            String tmpl = Strings.get("missingFactoryError");
+            String msg  = tmpl.contains("%s") ? String.format(tmpl, name) : (tmpl + " " + name);
+            throw new CircuitException(msg);
+        }
+    }
+
+    /** Intenta setear el modo de signo en un comparador (SIGNED / UNSIGNED). */
+    protected static void setComparatorSignMode(AttributeSet attrs, boolean signed) {
+        // Soporta ambos tipos de atributos: "mode" o "signMode"
+        if (!setParsedIfPresent(attrs, "signMode", signed ? "signed" : "unsigned")) {
+            setParsedIfPresent(attrs, "mode", signed ? "twosComplement" : "unsigned");
+        }
     }
 }

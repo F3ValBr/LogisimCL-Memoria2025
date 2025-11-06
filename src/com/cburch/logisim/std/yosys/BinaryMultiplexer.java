@@ -14,10 +14,10 @@ public class BinaryMultiplexer extends InstanceFactory {
     private static final int DELAY = 3;
 
     // Puertos (índices estables)
-    private static final int A  = 0;
-    private static final int A_X= 1; // sólo existe si totalBits>32
-    private static final int S  = 2;
-    private static final int Y  = 3;
+    static final int A  = 0;
+    static final int A_X= 1; // sólo existe si totalBits>32
+    static final int S  = 2;
+    static final int Y  = 3;
 
     public BinaryMultiplexer() {
         super("Binary Multiplexer", Strings.getter("bmuxComponent"));

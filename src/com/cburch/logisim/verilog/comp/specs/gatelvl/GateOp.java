@@ -9,7 +9,6 @@ public enum GateOp {
     // Simples (1-bit)
     AND    ("$_AND_",   Category.SIMPLE),
     BUF    ("$_BUF_",   Category.SIMPLE),
-    MUX    ("$_MUX_",   Category.SIMPLE),
     NAND   ("$_NAND_",  Category.SIMPLE),
     NOR    ("$_NOR_",   Category.SIMPLE),
     NOT    ("$_NOT_",   Category.SIMPLE),
@@ -26,6 +25,7 @@ public enum GateOp {
     OAI4   ("$_OAI4_",  Category.COMBINED),
 
     // Multiplexores anchos / variantes
+    MUX    ("$_MUX_",   Category.MUX_FAMILY),
     NMUX   ("$_NMUX_",  Category.MUX_FAMILY),
     MUX4   ("$_MUX4_",  Category.MUX_FAMILY),
     MUX8   ("$_MUX8_",  Category.MUX_FAMILY),
@@ -70,5 +70,3 @@ public enum GateOp {
         return Optional.ofNullable(INDEX.get(typeId));
     }
 }
-
-

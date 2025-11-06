@@ -1,8 +1,13 @@
 package com.cburch.logisim.verilog.comp;
 
 import com.cburch.logisim.verilog.comp.factories.ModuleInstanceFactory;
+import com.cburch.logisim.verilog.comp.factories.gatelvl.*;
+import com.cburch.logisim.verilog.comp.factories.ips.IPModuleFactory;
 import com.cburch.logisim.verilog.comp.factories.wordlvl.*;
 import com.cburch.logisim.verilog.comp.impl.VerilogCell;
+import com.cburch.logisim.verilog.comp.specs.ModuleAttribs;
+import com.cburch.logisim.verilog.comp.specs.gatelvl.RegisterGateOp;
+import com.cburch.logisim.verilog.comp.specs.gatelvl.GateOp;
 import com.cburch.logisim.verilog.comp.specs.wordlvl.*;
 
 import java.util.*;
@@ -10,12 +15,14 @@ import java.util.*;
 public class CellFactoryRegistry {
     private final Map<String, VerilogCellFactory> overrides = new HashMap<>();
 
+    private final VerilogCellFactory ipFactory     = new IPModuleFactory();
     private final VerilogCellFactory unaryFactory  = new UnaryOpFactory();
     private final VerilogCellFactory binaryFactory = new BinaryOpFactory();
     private final VerilogCellFactory muxFactory    = new MuxOpFactory();
     private final VerilogCellFactory registerFactory = new RegisterOpFactory();
     private final VerilogCellFactory memoryFactory = new MemoryOpFactory();
-    //private final VerilogCellFactory gateFactory   = new GateOpFactory();
+    private final VerilogCellFactory gateFactory   = new GateOpFactory();
+    private final VerilogCellFactory registerGateFactory = new RegisterGateOpFactory();
     private final VerilogCellFactory moduleFactory = new ModuleInstanceFactory();
 
     public void register(String typeId, VerilogCellFactory factory) {
@@ -34,60 +41,59 @@ public class CellFactoryRegistry {
             return f.create(name, typeId, parameters, attributes, portDirections, connections);
         }
 
-        // 1) Si viene marcado explícitamente como módulo no derivado → módulo
+        // Normaliza id para comparaciones
+        String norm = normalizeId(typeId);
+
+        // 1) IPs conocidas SIEMPRE primero (queremos mapear a nativo aunque haya module_not_derived)
+        if (IPModuleFactory.isIpTypeId(norm)) {
+            return ipFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+        }
+
+        // 2) Gate-level ($_...)
+        if (norm.startsWith("$_")) {
+            if (GateOp.isGateTypeId(typeId))
+                return gateFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+            if (RegisterGateOp.matchesRGOp(typeId))
+                return registerGateFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+            return moduleFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+        }
+
+        // 3) Word-level ($...)
+        if (norm.startsWith("$")) {
+            if (UnaryOp.isUnaryTypeId(typeId))
+                return unaryFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+            if (BinaryOp.isBinaryTypeId(typeId))
+                return binaryFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+            if (MuxOp.isMuxTypeId(typeId))
+                return muxFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+            if (RegisterOp.isRegisterTypeId(typeId))
+                return registerFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+            if (MemoryOp.isMemoryTypeId(typeId))
+                return memoryFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+            return moduleFactory.create(name, typeId, parameters, attributes, portDirections, connections);
+        }
+
+        // 4) Si viene marcado como módulo no derivado → módulo
         if (isModuleNotDerived(attributes)) {
             return moduleFactory.create(name, typeId, parameters, attributes, portDirections, connections);
         }
 
-        // 2) Si no tiene typeId o está vacío → tratar como módulo
+        // 5) Sin typeId → módulo
         if (typeId == null || typeId.isBlank()) {
             return moduleFactory.create(name, "<unknown>", parameters, attributes, portDirections, connections);
         }
 
-        // 3) Gate-level conocidos ($_...)
-        /**
-        if (typeId.startsWith("$_")) {
-            if (GateOp.isGateTypeId(typeId)) {
-                return gateFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-            }
-            // gate desconocido → MÓDULO
-            return moduleFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-        }*/
-
-        // 4) Word-level ($...)
-        if (typeId.startsWith("$")) {
-            if (UnaryOp.isUnaryTypeId(typeId)) {
-                return unaryFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-            }
-            if (BinaryOp.isBinaryTypeId(typeId)) {
-                return binaryFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-            }
-            if (MuxOp.isMuxTypeId(typeId)) {
-                return muxFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-            }
-            if (RegisterOp.isRegisterTypeId(typeId)) {
-                return registerFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-            }
-            if (MemoryOp.isMemoryTypeId(typeId)) {
-                return memoryFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-            }
-            // word-level desconocido → MÓDULO
-            return moduleFactory.create(name, typeId, parameters, attributes, portDirections, connections);
-        }
-
-        // 5) Sin '$' → instancia de módulo de usuario
+        // 6) Módulo de usuario
         return moduleFactory.create(name, typeId, parameters, attributes, portDirections, connections);
     }
 
     /* ===== Helpers ===== */
 
+    private static String normalizeId(String id) {
+        return id == null ? "" : id.trim().toLowerCase();
+    }
+
     private boolean isModuleNotDerived(Map<String,Object> attrs) {
-        if (attrs == null) return false;
-        Object v = attrs.get("module_not_derived");
-        if (v == null) return false;
-        if (v instanceof Boolean b) return b;
-        if (v instanceof Number n)  return n.longValue() != 0L;
-        String s = String.valueOf(v).trim();
-        return "1".equals(s) || "true".equalsIgnoreCase(s);
+        return new ModuleAttribs(attrs).isModuleNotDerived();
     }
 }

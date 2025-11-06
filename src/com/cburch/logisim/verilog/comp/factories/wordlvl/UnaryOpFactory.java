@@ -26,9 +26,6 @@ public class UnaryOpFactory extends AbstractVerilogCellFactory {
             Map<String, List<Object>> connections
     ) {
         UnaryOp op = UnaryOp.fromYosys(type);
-        if (op == null) {
-            throw new IllegalArgumentException("Unknown unary operation type: " + type);
-        }
         UnaryOpParams parameters = new UnaryOpParams(op, params);
         CommonOpAttribs attributes = new CommonOpAttribs(attribs);
         WordLvlCellImpl cell = new WordLvlCellImpl(name, CellType.fromYosys(type), parameters, attributes);

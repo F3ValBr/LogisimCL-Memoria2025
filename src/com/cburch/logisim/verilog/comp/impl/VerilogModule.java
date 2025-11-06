@@ -1,6 +1,7 @@
 package com.cburch.logisim.verilog.comp.impl;
 
 import com.cburch.logisim.verilog.comp.auxiliary.ModulePort;
+import com.cburch.logisim.verilog.comp.auxiliary.NetnameEntry;
 
 import java.util.List;
 
@@ -13,7 +14,9 @@ public interface VerilogModule {
     String name();
     List<ModulePort> ports();
     List<VerilogCell> cells();
+    List<NetnameEntry> netnames();
 
     void addCell(VerilogCell cell);
     void addModulePort(ModulePort p);
+    void addNetname(NetnameEntry entry);
 }

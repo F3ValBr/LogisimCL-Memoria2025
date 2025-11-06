@@ -5,12 +5,13 @@ import com.cburch.logisim.circuit.CircuitException;
 import com.cburch.logisim.circuit.CircuitMutation;
 import com.cburch.logisim.comp.Component;
 import com.cburch.logisim.comp.ComponentFactory;
-import com.cburch.logisim.data.Attribute;
-import com.cburch.logisim.data.AttributeSet;
-import com.cburch.logisim.data.Bounds;
-import com.cburch.logisim.data.Location;
+import com.cburch.logisim.data.*;
 import com.cburch.logisim.proj.Project;
 import com.cburch.logisim.verilog.comp.auxiliary.CellType;
+import com.cburch.logisim.verilog.comp.impl.VerilogCell;
+import com.cburch.logisim.verilog.std.adapters.MacroRegistry;
+import com.cburch.logisim.verilog.std.macrocomponents.ComposeCtx;
+import com.cburch.logisim.verilog.std.macrocomponents.Factories;
 
 import java.awt.*;
 
@@ -68,7 +69,7 @@ public abstract class AbstractComponentAdapter implements ComponentAdapter {
     /* ===== setters “por nombre” seguros ===== */
 
     /** Busca un atributo por name dentro del AttributeSet. */
-    protected static Attribute<?> findAttrByName(AttributeSet attrs, String name) {
+    public static Attribute<?> findAttrByName(AttributeSet attrs, String name) {
         for (Attribute<?> a : attrs.getAttributes()) {
             if (name.equals(a.getName())) return a;
         }
@@ -76,7 +77,7 @@ public abstract class AbstractComponentAdapter implements ComponentAdapter {
     }
 
     /** Core: parsea y setea usando Attribute.parse(token). Devuelve true si pudo setear. */
-    protected static boolean setParsedByName(AttributeSet attrs, String name, String token) {
+    public static boolean setParsedByName(AttributeSet attrs, String name, String token) {
         Attribute<?> a = findAttrByName(attrs, name);
         if (a == null) return false;
         try {
@@ -91,29 +92,64 @@ public abstract class AbstractComponentAdapter implements ComponentAdapter {
     }
 
     /** Wrappers mínimos y legibles */
-    protected static boolean setBooleanByName(AttributeSet attrs, String name, boolean value) {
+    public static boolean setBooleanByName(AttributeSet attrs, String name, boolean value) {
         return setParsedByName(attrs, name, String.valueOf(value));
     }
 
-    protected static boolean setOptionByName(AttributeSet attrs, String name, String optionName) {
+    public static boolean setOptionByName(AttributeSet attrs, String name, String optionName) {
         // optionName debe ser el “token” que reconoce parse(), p.ej. "asyncReset", "rstActiveHigh", etc.
         return setParsedByName(attrs, name, optionName);
     }
 
-    protected static boolean setStringByName(AttributeSet attrs, String name, String value) {
+    public static boolean setStringByName(AttributeSet attrs, String name, String value) {
         return setParsedByName(attrs, name, value);
     }
 
-    protected static boolean setIntByName(AttributeSet attrs, String name, int value) {
+    public static boolean setIntByName(AttributeSet attrs, String name, int value) {
         return setParsedByName(attrs, name, Integer.toString(value));
     }
 
-    protected static boolean setHexByName(AttributeSet attrs, String name, int value) {
+    public static boolean setHexByName(AttributeSet attrs, String name, int value) {
         return setParsedByName(attrs, name, "0x" + Integer.toHexString(value));
     }
 
+    @SuppressWarnings("unchecked")
+    public static boolean setBitWidthByName(AttributeSet attrs, String name, int width) {
+        if (attrs == null || name == null) return false;
+        if (width < 1) width = 1;
+
+        try {
+            BitWidth bw = BitWidth.create(width);
+
+            for (Attribute<?> a : attrs.getAttributes()) {
+                if (name.equalsIgnoreCase(a.getName())) {
+                    Object val = attrs.getValue(a);
+                    // verificamos por tipo en tiempo de ejecución
+                    if (val instanceof BitWidth || a.toString().toLowerCase().contains("bitwidth")) {
+                        attrs.setValue((Attribute<BitWidth>) a, bw);
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable t) { /* ignore */ }
+        return false;
+    }
+
+
+    public static boolean parseBoolRelaxed(Object v, boolean dflt) {
+        if (v == null) return dflt;
+        if (v instanceof Boolean b) return b;
+        String s = String.valueOf(v).trim().toLowerCase();
+        return switch (s) {
+            case "1","true","yes","y","t" -> true;
+            case "0","false","no","n","f" -> false;
+            default -> dflt;
+        };
+    }
+
+
     /** Si el token es null/blank, no hace nada (azúcar sintáctico útil). */
-    protected static boolean setParsedIfPresent(AttributeSet attrs, String name, String token) {
+    public static boolean setParsedIfPresent(AttributeSet attrs, String name, String token) {
         if (token == null || token.isBlank()) return false;
         return setParsedByName(attrs, name, token);
     }
@@ -128,5 +164,31 @@ public abstract class AbstractComponentAdapter implements ComponentAdapter {
         String last   = parts[parts.length - 1]; // después del último $
 
         return middle + "_" + last;
+    }
+
+    /** Intenta componer la celda usando una receta de MacroRegistry.
+     *  Si no existe receta para el typeId, devuelve null.
+     *  Si falla la composición, lanza IllegalStateException.
+     */
+    protected InstanceHandle tryComposeWithMacroOrNull(
+            Project proj,
+            Circuit circ,
+            Graphics g,
+            VerilogCell cell,
+            Location where,
+            MacroRegistry registry
+    ) {
+        if (registry == null || cell == null || cell.type() == null) return null;
+
+        MacroRegistry.Recipe recipe = registry.find(cell.type().typeId());
+        if (recipe == null) return null;
+
+        var ctx = new ComposeCtx(proj, circ, g, Factories.warmup(proj));
+        try {
+            return recipe.build(ctx, cell, where);
+        } catch (CircuitException e) {
+            throw new IllegalStateException(
+                    "No se pudo componer " + cell.type().typeId() + ": " + e.getMessage(), e);
+        }
     }
 }

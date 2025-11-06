@@ -10,6 +10,8 @@ import com.cburch.logisim.data.Direction;
 import com.cburch.logisim.data.Location;
 import com.cburch.logisim.instance.StdAttr;
 import com.cburch.logisim.verilog.comp.impl.VerilogCell;
+import com.cburch.logisim.verilog.comp.specs.wordlvl.UnaryOp;
+import com.cburch.logisim.verilog.comp.specs.wordlvl.UnaryOpParams;
 import com.cburch.logisim.verilog.std.InstanceHandle;
 import com.cburch.logisim.verilog.std.adapters.BaseComposer;
 import com.cburch.logisim.verilog.std.macrocomponents.ComposeCtx;
@@ -26,10 +28,12 @@ public final class UnaryOpComposer extends BaseComposer {
     /* ==== Public API: devuelve la instancia del submódulo (InstanceHandle) ==== */
 
     /** $reduce_or/$reduce_bool(A) := NOT( A == 0 ). */
-    public InstanceHandle buildReduceOrAsSubckt(ComposeCtx ctx, VerilogCell cell, Location where, int aWidth)
+    public InstanceHandle buildReduceOrAsSubckt(ComposeCtx ctx, VerilogCell cell, Location where, int aWidth, boolean isBool)
             throws CircuitException {
-        require(ctx.fx.cmp, "Comparator"); require(ctx.fx.notF, "NOT Gate"); require(ctx.fx.pinF, "Pin");
-        final String name = MacroSubcktKit.macroName("reduce_or", aWidth);
+        require(ctx.fx.cmpF, "Comparator"); require(ctx.fx.notF, "NOT Gate"); require(ctx.fx.pinF, "Pin");
+        final String name = MacroSubcktKit.macroName(isBool ? "reduce_bool" : "reduce_or", aWidth);
+
+        UnaryOpParams p = new UnaryOpParams(UnaryOp.REDUCE_OR, cell.params().asMap());
 
         BiConsumer<ComposeCtx, Circuit> populate = (in, macro) -> {
             try {
@@ -38,7 +42,9 @@ public final class UnaryOpComposer extends BaseComposer {
                 Component pinA = addPin(in, "A", false, aWidth, Location.create(cmpLoc.getX()-80, cmpLoc.getY()-10));
                 Component pinY = addPin(in, "Y", true, 1, cmpLoc.translate(30,0));
 
-                Component cmp = add(in, in.fx.cmp, cmpLoc, attrsWithWidthAndLabel(in.fx.cmp, aWidth, "A==0"));
+                Component cmp = add(in, in.fx.cmpF, cmpLoc, attrsWithWidthAndLabel(in.fx.cmpF, aWidth, "A==0"));
+                setComparatorSignMode(cmp.getAttributeSet(), p.aSigned());
+
                 if (in.fx.constF != null) {
                     AttributeSet k = in.fx.constF.createAttributeSet();
                     setByNameParsed(k, "width", Integer.toString(aWidth));
@@ -61,8 +67,10 @@ public final class UnaryOpComposer extends BaseComposer {
     /** $reduce_and(A) := (A == 2^N - 1). */
     public InstanceHandle buildReduceAndAsSubckt(ComposeCtx ctx, VerilogCell cell, Location where, int aWidth)
             throws CircuitException {
-        require(ctx.fx.cmp, "Comparator"); require(ctx.fx.pinF, "Pin");
+        require(ctx.fx.cmpF, "Comparator"); require(ctx.fx.pinF, "Pin");
         final String name = MacroSubcktKit.macroName("reduce_and", aWidth);
+
+        UnaryOpParams p = new UnaryOpParams(UnaryOp.REDUCE_AND, cell.params().asMap());
 
         BiConsumer<ComposeCtx, Circuit> populate = (in, macro) -> {
             try {
@@ -71,7 +79,8 @@ public final class UnaryOpComposer extends BaseComposer {
                 Component pinA = addPin(in, "A", false, aWidth, cmpLoc.translate(-80,-10));
                 Component pinY = addPin(in, "Y", true, 1, cmpLoc);
 
-                Component cmp = add(in, in.fx.cmp, cmpLoc, attrsWithWidthAndLabel(in.fx.cmp, aWidth, "A==all1"));
+                Component cmp = add(in, in.fx.cmpF, cmpLoc, attrsWithWidthAndLabel(in.fx.cmpF, aWidth, "A==all1"));
+                setComparatorSignMode(cmp.getAttributeSet(), p.aSigned());
                 if (in.fx.constF != null) {
                     AttributeSet k = in.fx.constF.createAttributeSet();
                     setByNameParsed(k, "width", Integer.toString(aWidth));

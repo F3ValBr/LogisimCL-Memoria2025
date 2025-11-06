@@ -30,6 +30,7 @@ public class Wiring extends Library {
 		new AddTool(Pin.FACTORY),
 		new AddTool(Probe.FACTORY),
 		new AddTool(Tunnel.FACTORY),
+        new AddTool(BitLabeledTunnel.FACTORY),
 		new AddTool(PullResistor.FACTORY),
 		new AddTool(Clock.FACTORY),
 		new AddTool(Constant.FACTORY),

@@ -21,6 +21,8 @@ public class YosysComponent extends Library {
                     "logicor.gif", "LogicalOrGate"),
             new FactoryDescription("Exponent", Strings.getter("exponentComponent"),
                     "exponent.gif", "Exponent"),
+            new FactoryDescription("Dynamic Shifter", Strings.getter("dynamicShifterComponent"),
+                    "dynamicShifter.gif", "DynamicShifter"),
             new FactoryDescription("Bitwise Multiplexer", Strings.getter("bwmuxComponent"),
                     "bwmultiplexer.gif", "BitwiseMultiplexer"),
             new FactoryDescription("Priority Multiplexer", Strings.getter("pmuxComponent"),

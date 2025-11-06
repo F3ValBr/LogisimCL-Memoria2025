@@ -234,13 +234,16 @@ public class Register extends InstanceFactory {
 
         Value vCK  = state.getPort(data.CK);
         Value vIN  = state.getPort(data.IN);
-        Value vEN  = (data.EN  >= 0) ? state.getPort(data.EN)  : Value.TRUE;
         Value vCLR = (data.CLR >= 0) ? state.getPort(data.CLR) : Value.FALSE;
 
         // EN
         boolean enVisible   = (data.EN >= 0) && hasEn(state.getInstance());
         boolean enHigh      = enActiveHigh(state.getInstance());
-        boolean enAsserted  = !enVisible || isAsserted(vEN, enHigh);
+
+        boolean enConnected = enVisible && state.isPortConnected(data.EN);
+        Value   vEN         = enVisible ? state.getPort(data.EN) : Value.TRUE;
+
+        boolean enAsserted  = !enVisible || !enConnected || isAsserted(vEN, enHigh);
 
         boolean triggered   = data.updateClock(vCK, triggerType);
 

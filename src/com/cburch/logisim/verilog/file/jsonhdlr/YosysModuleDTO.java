@@ -1,8 +1,9 @@
 package com.cburch.logisim.verilog.file.jsonhdlr;
 
+import com.cburch.logisim.verilog.comp.auxiliary.NetnameEntry;
 import com.cburch.logisim.verilog.comp.impl.VerilogModuleImpl;
 import com.cburch.logisim.verilog.comp.auxiliary.ModulePort;
-import com.cburch.logisim.verilog.comp.auxiliary.netconn.Direction;
+import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.*;
@@ -137,7 +138,7 @@ public record YosysModuleDTO(String name, JsonNode moduleNode) {
             String portName = e.getKey();
             JsonNode p = e.getValue();
 
-            Direction dir = Direction.fromJson(p.path("direction").asText("unknown"));
+            PortDirection dir = PortDirection.fromJson(p.path("direction").asText("unknown"));
             JsonNode bits = p.path("bits");
             int[] netIds = new int[bits.size()];
 
@@ -157,5 +158,33 @@ public record YosysModuleDTO(String name, JsonNode moduleNode) {
             }
             mod.addModulePort(new ModulePort(portName, dir, netIds));
         }
+    }
+
+    /** Lector de netnames desde JSON. */
+    public static void readNetnames(JsonNode netnamesNode, VerilogModuleImpl mod) {
+        if (netnamesNode == null || !netnamesNode.isObject()) return;
+
+        netnamesNode.fields().forEachRemaining(e -> {
+            String name = e.getKey();
+            JsonNode nn = e.getValue();
+            if (!nn.isObject()) return;
+
+            // bits
+            JsonNode bitsNode = nn.path("bits");
+            int[] bits = new int[Math.max(0, bitsNode.size())];
+            for (int i = 0; i < bits.length; i++) {
+                bits[i] = bitsNode.get(i).asInt(); // Yosys garantiza ints aquí
+            }
+
+            // hide_name (0/1 o boolean)
+            boolean hide = false;
+            JsonNode hideNode = nn.get("hide_name");
+            if (hideNode != null) {
+                if (hideNode.isBoolean()) hide = hideNode.booleanValue();
+                else hide = (hideNode.asInt(0) != 0);
+            }
+
+            mod.addNetname(new NetnameEntry(name, bits, hide));
+        });
     }
 }

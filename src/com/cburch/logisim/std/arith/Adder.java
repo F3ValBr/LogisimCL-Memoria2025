@@ -14,12 +14,12 @@ import com.cburch.logisim.util.GraphicsUtil;
 public class Adder extends InstanceFactory {
 	static final int PER_DELAY = 1;
 
-    private static final int IN0   = 0;
-    private static final int IN1   = 1;
-    private static final int OUT   = 2;
-    private static final int C_IN  = 3;
-    private static final int C_OUT = 4;
-    private static final int SIGN_SEL = 5;
+    static final int IN0   = 0;
+    static final int IN1   = 1;
+    static final int OUT   = 2;
+    static final int C_IN  = 3;
+    static final int C_OUT = 4;
+    static final int SIGN_SEL = 5;
 
     // ===== Modo de signo =====
     public static final AttributeOption MODE_UNSIGNED
@@ -39,7 +39,7 @@ public class Adder extends InstanceFactory {
         super("Adder", Strings.getter("adderComponent"));
         setAttributes(
                 new Attribute[]{ StdAttr.WIDTH, SIGN_MODE },
-                new Object[]   { BitWidth.create(8), MODE_AUTO }
+                new Object[]   { BitWidth.create(8), MODE_UNSIGNED }
         );
         setKeyConfigurator(new BitWidthConfigurator(StdAttr.WIDTH));
         setOffsetBounds(Bounds.create(-40, -20, 40, 40));

@@ -1,5 +1,6 @@
 package com.cburch.logisim.verilog.layout;
 
+import com.cburch.logisim.verilog.comp.auxiliary.netconn.PortDirection;
 import com.cburch.logisim.verilog.comp.impl.VerilogCell;
 import com.cburch.logisim.verilog.comp.auxiliary.ModulePort;
 import com.cburch.logisim.verilog.comp.auxiliary.PortEndpoint;
@@ -128,5 +129,44 @@ public final class ModuleNetIndex {
     /** Acceso al modelo (por si lo necesitas para layout/adapters). */
     public VerilogCell cellAt(int idx){ return cells.get(idx); }
     public ModulePort topPortAt(int idx){ return modulePorts.get(idx); }
+
+    /** Info agrupada de un puerto en una celda */
+    public static final class CellPortInfo {
+        private final String name;
+        private final PortDirection portDirection;
+        private final List<PortEndpoint> bits;
+
+        public CellPortInfo(String name, PortDirection portDirection, List<PortEndpoint> bits) {
+            this.name = name;
+            this.portDirection = portDirection;
+            this.bits = bits;
+        }
+
+        public String name() { return name; }
+        public PortDirection direction() { return portDirection; }
+        public int width() { return bits.size(); }
+        public List<PortEndpoint> bits() { return bits; }
+    }
+
+    /** Devuelve todos los puertos de una celda, agrupados */
+    public List<CellPortInfo> getCellPorts(int cellIdx) {
+        VerilogCell cell = cellAt(cellIdx);
+
+        // Agrupar por nombre de puerto
+        Map<String,List<PortEndpoint>> grouped = new LinkedHashMap<>();
+        for (PortEndpoint ep : cell.endpoints()) {
+            grouped.computeIfAbsent(ep.getPortName(), k -> new ArrayList<>()).add(ep);
+        }
+
+        // Convertir en objetos de alto nivel
+        List<CellPortInfo> infos = new ArrayList<>();
+        for (var entry : grouped.entrySet()) {
+            String portName = entry.getKey();
+            List<PortEndpoint> eps = entry.getValue();
+            PortDirection dir = eps.isEmpty() ? PortDirection.UNKNOWN : eps.get(0).getDirection();
+            infos.add(new CellPortInfo(portName, dir, eps));
+        }
+        return infos;
+    }
 }
 

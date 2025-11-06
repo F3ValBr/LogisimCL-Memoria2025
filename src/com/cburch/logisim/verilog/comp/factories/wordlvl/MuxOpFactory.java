@@ -22,21 +22,21 @@ public class MuxOpFactory extends AbstractVerilogCellFactory implements VerilogC
     @Override
     public VerilogCell create(
             String name,
-            String typeId,
+            String type,
             Map<String, String> params,
             Map<String, Object> attribs,
             Map<String, String> ports,
             Map<String, List<Object>> connections
     ) {
         // 1) Classification by enum
-        final MuxOp op = MuxOp.fromYosys(typeId);
+        final MuxOp op = MuxOp.fromYosys(type);
 
         // 2) Specific parameters by op
         final MuxOpParams parameters = getMuxOpParams(op, params);
 
         // 3) Attribs + cell creation
         final CommonOpAttribs attributes = new CommonOpAttribs(attribs); // or GenericCellAttribs
-        final WordLvlCellImpl cell = new WordLvlCellImpl(name, CellType.fromYosys(typeId), parameters, attributes);
+        final WordLvlCellImpl cell = new WordLvlCellImpl(name, CellType.fromYosys(type), parameters, attributes);
 
         // 4) Endpoints
         buildEndpoints(cell, ports, connections);

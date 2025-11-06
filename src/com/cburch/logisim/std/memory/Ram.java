@@ -36,9 +36,10 @@ public class Ram extends Mem {
 	static final AttributeOption BUS_SEPARATE
 		= new AttributeOption("separate", Strings.getter("ramBusSeparate"));
 
-	static final Attribute<AttributeOption> ATTR_BUS = Attributes.forOption("bus",
-			Strings.getter("ramBusAttr"),
-			new AttributeOption[] { BUS_COMBINED, BUS_ASYNCH, BUS_SEPARATE });
+	static final Attribute<AttributeOption> ATTR_BUS =
+            Attributes.forOption("bus", Strings.getter("ramBusAttr"), new AttributeOption[] {
+                    BUS_COMBINED, BUS_ASYNCH, BUS_SEPARATE
+            });
     static final Attribute<Boolean> CLEAR_PIN =
             Attributes.forBoolean("clearpin", Strings.getter("ramClearPin"));
 

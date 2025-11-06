@@ -9,6 +9,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -444,35 +445,42 @@ public class Loader implements LibraryLoader {
 		}
 	}
 
-	/**
-	 * Opens a file chooser dialog for importing a JSON file.
-	 *
-	 * @param window the parent component for the dialog
-	 * @return a JsonNode representing the imported JSON file, or null if the user cancels
-	 *         or if an error occurs during loading
-	 */
-	public JsonNode JSONImportChooser(Component window) {
-		JFileChooser chooser = createChooser();
-		chooser.setFileFilter(JSON_FILTER);
-		chooser.setDialogTitle(Strings.get("jsonOpenDialog"));
-		int check = chooser.showOpenDialog(window);
-		if (check != JFileChooser.APPROVE_OPTION) {
-			return null;
-		}
+    /**
+     * A simple record class to hold the result of a JSON file load operation,
+     * including the loaded JsonNode and the path of the file.
+     */
+    public record JsonLoadResult(JsonNode root, Path path) { }
 
-		File f = chooser.getSelectedFile();
-		if (f == null || !f.exists() || !f.canRead()) {
-			return null;
-		}
+    /**
+     * Opens a file chooser dialog for importing a JSON file.
+     *
+     * @param window the parent component for the dialog
+     * @return a JsonLoadResult containing the loaded JsonNode and file path,
+     *         or null if the operation was canceled or failed
+     */
+    public JsonLoadResult JSONImportChooserWithPath(Component window) {
+        JFileChooser chooser = createChooser();
+        chooser.setFileFilter(JSON_FILTER);
+        chooser.setDialogTitle(Strings.get("jsonOpenDialog"));
+        int check = chooser.showOpenDialog(window);
+        if (check != JFileChooser.APPROVE_OPTION) {
+            return null;
+        }
 
-		try {
-			return JsonSynthFile.loadAndValidate(f);
-		} catch (IOException e) {
-			JOptionPane.showMessageDialog(window,
-				Strings.get("jsonOpenError", e.getMessage()),
-				Strings.get("fileErrorTitle"),
-				JOptionPane.ERROR_MESSAGE);
-			return null;
-		}
-	}
+        File f = chooser.getSelectedFile();
+        if (f == null || !f.exists() || !f.canRead()) {
+            return null;
+        }
+
+        try {
+            JsonNode node = JsonSynthFile.loadAndValidate(f);
+            return new JsonLoadResult(node, f.toPath().toAbsolutePath().normalize());
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(window,
+                    Strings.get("jsonOpenError", e.getMessage()),
+                    Strings.get("fileErrorTitle"),
+                    JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+    }
 }
